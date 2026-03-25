@@ -1,37 +1,66 @@
-# Copyright 2022 Google LLC
+# Copyright 2024 ckosiorkosa47
+# SPDX-License-Identifier: Apache-2.0
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# Multi-stage build for SockFuzzer on Linux.
 #
-#      http://www.apache.org/licenses/LICENSE-2.0
+# Build:
+#   docker build --pull -t sockfuzzer .
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Run fuzzer:
+#   docker run --rm -v $PWD/corpus:/work/corpus -v $PWD/crashes:/work/crashes \
+#     sockfuzzer ./net_fuzzer corpus/ -artifact_prefix=crashes/ -max_total_time=3600
+#
+# Interactive shell:
+#   docker run -it --rm sockfuzzer /bin/bash
 
-# Build environment for SockFuzzer on Linux.
-#
-# Usage:
-#   docker build --pull -t sockfuzzer-builder .
-#   docker run -t -i -v $PWD:/source sockfuzzer-builder /bin/bash
-#   # Inside the container:
-#   cd /source && mkdir -p build && cd build
-#   CC=clang CXX=clang++ cmake -GNinja .. && ninja
+# --- Stage 1: Builder ---
+FROM debian:bookworm-slim AS builder
 
-FROM gcr.io/oss-fuzz-base/base-builder
-
-RUN apt-get update && apt-get install -y \
-    autoconf \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    clang-16 \
     cmake \
     git \
-    g++-multilib \
-    libtool \
+    lld-16 \
+    llvm-16 \
     ninja-build \
-    python3 \
     libprotobuf-dev \
-    protobuf-compiler
+    protobuf-compiler \
+    ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-16 100 \
+  && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-16 100 \
+  && update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-16 100 \
+  && update-alternatives --install /usr/bin/llvm-profdata llvm-profdata /usr/bin/llvm-profdata-16 100 \
+  && update-alternatives --install /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-16 100
 
-WORKDIR $SRC
+WORKDIR /build/source
+COPY . .
+
+RUN mkdir -p /build/out && cd /build/out \
+  && CC=clang CXX=clang++ cmake -GNinja /build/source \
+  && ninja
+
+# --- Stage 2: Runtime ---
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libprotobuf32 \
+    libstdc++6 \
+    llvm-16 \
+  && rm -rf /var/lib/apt/lists/* \
+  && update-alternatives --install /usr/bin/llvm-profdata llvm-profdata /usr/bin/llvm-profdata-16 100 \
+  && update-alternatives --install /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-16 100
+
+WORKDIR /work
+
+COPY --from=builder /build/out/net_fuzzer /work/
+COPY --from=builder /build/source/net_fuzzer.dict /work/
+COPY --from=builder /build/source/scripts/ /work/scripts/
+
+RUN mkdir -p corpus crashes && chmod +x scripts/*.sh
+
+ENV ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=0
+
+ENTRYPOINT ["/work/net_fuzzer"]
+CMD ["corpus/", "-artifact_prefix=crashes/", "-dict=net_fuzzer.dict"]

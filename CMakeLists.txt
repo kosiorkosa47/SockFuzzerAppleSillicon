@@ -749,15 +749,82 @@ target_include_directories(net_fuzzer PRIVATE
   ${Protobuf_INCLUDE_DIRS}
   ${CMAKE_CURRENT_BINARY_DIR}
 )
+# Fuzzer harness gets stricter warnings than XNU source.
 target_compile_options(
-  net_fuzzer PRIVATE -g -std=c++17 -Wno-error -Wno-address-of-packed-member
+  net_fuzzer PRIVATE -g -std=c++17 -Wall -Wextra
+                     -Wno-unused-parameter -Wno-sign-compare
+                     -Wno-address-of-packed-member
                      -Wno-deprecated-declarations
+                     -Wno-missing-field-initializers
                      ${FUZZER_CXX_FLAGS}
 )
 
 # --------------------------------------------------------------------------
-# Coverage builds — Linux only
+# Coverage builds — Linux and macOS
 # --------------------------------------------------------------------------
+if(NOT DEFINED ENV{SANITIZER} AND APPLE)
+  # macOS coverage build using Homebrew LLVM
+  add_library(osfmk_cov OBJECT ${OSFMK_SOURCES})
+  target_include_directories(osfmk_cov PRIVATE ${OSFMK_INCLUDES})
+  set_property(TARGET osfmk_cov PROPERTY C_VISIBILITY_PRESET hidden)
+  set_property(TARGET osfmk_cov PROPERTY POSITION_INDEPENDENT_CODE ON)
+  target_compile_options(
+    osfmk_cov PRIVATE ${XNU_C_FLAGS} ${OSFMK_DEFINES} -DLIBXNU_BUILD=1
+                      -fprofile-instr-generate -fcoverage-mapping
+  )
+
+  add_library(bsd_cov OBJECT ${BSD_SOURCES} ${FUZZER_SOURCES})
+  set_property(TARGET bsd_cov PROPERTY C_VISIBILITY_PRESET hidden)
+  set_property(TARGET bsd_cov PROPERTY POSITION_INDEPENDENT_CODE ON)
+  target_include_directories(bsd_cov PRIVATE ${BSD_INCLUDES})
+  target_compile_options(
+    bsd_cov PRIVATE ${XNU_C_FLAGS} ${BSD_DEFINES} ${SAN_DEFINES} -DLIBXNU_BUILD=1
+                    ${FUZZER_DEFINES} -fprofile-instr-generate -fcoverage-mapping
+  )
+
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/xnu_exported_symbols.txt
+    ${CMAKE_CURRENT_BINARY_DIR}/xnu_cov_exported_symbols.txt COPYONLY
+  )
+
+  add_custom_command(
+    OUTPUT libxnu_cov_relocatable.o
+    COMMAND ld -r -arch ${CMAKE_SYSTEM_PROCESSOR} $<TARGET_OBJECTS:bsd_cov> $<TARGET_OBJECTS:osfmk_cov> -o libxnu_cov_relocatable_raw.o
+    COMMAND nmedit -s ${CMAKE_CURRENT_BINARY_DIR}/xnu_cov_exported_symbols.txt -p libxnu_cov_relocatable_raw.o -o libxnu_cov_relocatable.o
+    DEPENDS $<TARGET_OBJECTS:bsd_cov> $<TARGET_OBJECTS:osfmk_cov>
+    COMMAND_EXPAND_LISTS VERBATIM
+    COMMENT "Creating coverage-instrumented XNU object"
+  )
+  add_custom_target(xnu_cov_obj DEPENDS libxnu_cov_relocatable.o)
+
+  add_library(startup_trampoline_cov OBJECT fuzz/fakes/startup_trampoline.c)
+  target_compile_options(startup_trampoline_cov PRIVATE -g
+    -fprofile-instr-generate -fcoverage-mapping)
+
+  add_executable(
+    net_cov fuzz/net_fuzzer.cc ${NET_PROTO_SRCS} ${NET_PROTO_HDRS}
+    ${CMAKE_CURRENT_BINARY_DIR}/libxnu_cov_relocatable.o
+    $<TARGET_OBJECTS:startup_trampoline_cov>
+  )
+  add_dependencies(net_cov bsd_cov osfmk_cov xnu_cov_obj)
+  target_include_directories(net_cov PRIVATE
+    third_party/libprotobuf-mutator ${Protobuf_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_BINARY_DIR}
+  )
+  target_compile_options(
+    net_cov PRIVATE -g -std=c++17 -Wno-error -Wno-address-of-packed-member
+                    -Wno-deprecated-declarations
+                    -fprofile-instr-generate -fcoverage-mapping
+  )
+  target_link_libraries(
+    net_cov
+    -fsanitize=fuzzer
+    -fprofile-instr-generate -fcoverage-mapping
+    protobuf-mutator ${Protobuf_LIBRARIES}
+    "-Wl,-undefined,dynamic_lookup"
+  )
+endif()
+
 if(NOT DEFINED ENV{SANITIZER} AND NOT APPLE)
   add_library(osfmk_cov OBJECT ${OSFMK_SOURCES})
   target_include_directories(osfmk_cov PRIVATE ${OSFMK_INCLUDES})
