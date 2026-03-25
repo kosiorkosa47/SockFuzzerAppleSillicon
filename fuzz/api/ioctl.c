@@ -327,3 +327,23 @@ __attribute__((visibility("default"))) const unsigned long siocaifaddr_in6_64 =
     SIOCAIFADDR_IN6_64;
 __attribute__((visibility("default"))) const unsigned long siocsifflags =
     SIOCSIFFLAGS;
+__attribute__((visibility("default"))) const unsigned long siocsifmtu_val =
+    SIOCSIFMTU;
+__attribute__((visibility("default"))) const unsigned long siocaddmulti_val =
+    SIOCADDMULTI;
+__attribute__((visibility("default"))) const unsigned long siocdelmulti_val =
+    SIOCDELMULTI;
+__attribute__((visibility("default"))) const unsigned long siocprotoattach_val =
+    SIOCPROTOATTACH;
+__attribute__((visibility("default"))) const unsigned long siocprotodetach_val =
+    SIOCPROTODETACH;
+__attribute__((visibility("default"))) const unsigned long siocsifaddr_val =
+    SIOCSIFADDR;
+__attribute__((visibility("default"))) const unsigned long diocstart_val =
+    DIOCSTART;
+__attribute__((visibility("default"))) const unsigned long diocstop_val =
+    DIOCSTOP;
+__attribute__((visibility("default"))) const unsigned long siocsetroutermode_val =
+    SIOCSETROUTERMODE;
+__attribute__((visibility("default"))) const unsigned long siocsifvlan_val =
+    SIOCSIFVLAN;

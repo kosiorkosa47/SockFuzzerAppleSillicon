@@ -515,10 +515,43 @@ message Listen {
   optional int32 backlog = 2;
 }
 
+message IfReqMtu {
+  required IfrName ifr_name = 1;
+  required uint32 ifr_mtu = 2;
+}
+
+message IfReqAddr {
+  required IfrName ifr_name = 1;
+  required SockAddr ifr_addr = 2;
+}
+
+message IfReqMulti {
+  required IfrName ifr_name = 1;
+  required SockAddr ifr_addr = 2;
+}
+
+message IfReqRouterMode {
+  required IfrName ifr_name = 1;
+  required uint32 mode = 2;
+}
+
+message IfReqVlan {
+  required IfrName ifr_name = 1;
+  required uint32 vlr_tag = 2;
+}
+
 message IoctlReal {
   oneof ioctl {
     In6_AliasReq_64 siocaifaddr_in6_64 = 1;
     IfReqFlags siocsifflags = 3;
+    IfReqMtu siocsifmtu = 4;
+    IfReqMulti siocaddmulti = 5;
+    IfReqMulti siocdelmulti = 6;
+    IfReqFlags siocprotoattach = 7;
+    IfReqFlags siocprotodetach = 8;
+    IfReqAddr siocsifaddr = 9;
+    IfReqRouterMode siocsetroutermode = 10;
+    IfReqVlan siocsifvlan = 11;
   }
   optional FileDescriptor fd = 2;
 }

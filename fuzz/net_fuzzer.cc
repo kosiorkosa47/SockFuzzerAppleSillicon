@@ -443,6 +443,16 @@ extern unsigned long ioctls[];
 extern int num_ioctls;
 extern const unsigned long siocaifaddr_in6_64;
 extern const unsigned long siocsifflags;
+extern const unsigned long siocsifmtu_val;
+extern const unsigned long siocaddmulti_val;
+extern const unsigned long siocdelmulti_val;
+extern const unsigned long siocprotoattach_val;
+extern const unsigned long siocprotodetach_val;
+extern const unsigned long siocsifaddr_val;
+extern const unsigned long diocstart_val;
+extern const unsigned long diocstop_val;
+extern const unsigned long siocsetroutermode_val;
+extern const unsigned long siocsifvlan_val;
 
 // Enable this when copyout should work.
 extern bool real_copyout;
@@ -922,6 +932,81 @@ void HandleIoctlReal(const Command &command) {
       }
       get_ifr_name(ifreq.ifr_name, LO0);
       ioctl_wrapper(command.ioctl_real().fd(), siocsifflags,
+                    (caddr_t)&ifreq, nullptr);
+      break;
+    }
+    case IoctlReal::kSiocsifmtu: {
+      struct ifreq ifreq = {};
+      get_ifr_name(ifreq.ifr_name, command.ioctl_real().siocsifmtu().ifr_name());
+      ifreq.ifr_ifru.ifru_mtu = command.ioctl_real().siocsifmtu().ifr_mtu();
+      ioctl_wrapper(command.ioctl_real().fd(), siocsifmtu_val,
+                    (caddr_t)&ifreq, nullptr);
+      break;
+    }
+    case IoctlReal::kSiocaddmulti:
+    case IoctlReal::kSiocdelmulti: {
+      const IfReqMulti &multi = (command.ioctl_real().ioctl_case() ==
+                                  IoctlReal::kSiocaddmulti)
+                                    ? command.ioctl_real().siocaddmulti()
+                                    : command.ioctl_real().siocdelmulti();
+      struct ifreq ifreq = {};
+      get_ifr_name(ifreq.ifr_name, multi.ifr_name());
+      std::string addr_s = get_sockaddr(multi.ifr_addr());
+      if (!addr_s.empty()) {
+        memcpy(&ifreq.ifr_ifru.ifru_addr, addr_s.data(),
+               std::min(addr_s.size(), sizeof(ifreq.ifr_ifru.ifru_addr)));
+      }
+      unsigned long cmd = (command.ioctl_real().ioctl_case() ==
+                           IoctlReal::kSiocaddmulti)
+                              ? siocaddmulti_val
+                              : siocdelmulti_val;
+      ioctl_wrapper(command.ioctl_real().fd(), cmd, (caddr_t)&ifreq, nullptr);
+      break;
+    }
+    case IoctlReal::kSiocprotoattach:
+    case IoctlReal::kSiocprotodetach: {
+      const IfReqFlags &pf = (command.ioctl_real().ioctl_case() ==
+                               IoctlReal::kSiocprotoattach)
+                                 ? command.ioctl_real().siocprotoattach()
+                                 : command.ioctl_real().siocprotodetach();
+      struct ifreq ifreq = {};
+      get_ifr_name(ifreq.ifr_name, pf.ifr_name());
+      unsigned long cmd = (command.ioctl_real().ioctl_case() ==
+                           IoctlReal::kSiocprotoattach)
+                              ? siocprotoattach_val
+                              : siocprotodetach_val;
+      ioctl_wrapper(command.ioctl_real().fd(), cmd, (caddr_t)&ifreq, nullptr);
+      break;
+    }
+    case IoctlReal::kSiocsifaddr: {
+      struct ifreq ifreq = {};
+      get_ifr_name(ifreq.ifr_name,
+                   command.ioctl_real().siocsifaddr().ifr_name());
+      std::string addr_s =
+          get_sockaddr(command.ioctl_real().siocsifaddr().ifr_addr());
+      if (!addr_s.empty()) {
+        memcpy(&ifreq.ifr_ifru.ifru_addr, addr_s.data(),
+               std::min(addr_s.size(), sizeof(ifreq.ifr_ifru.ifru_addr)));
+      }
+      ioctl_wrapper(command.ioctl_real().fd(), siocsifaddr_val,
+                    (caddr_t)&ifreq, nullptr);
+      break;
+    }
+    case IoctlReal::kSiocsetroutermode: {
+      struct ifreq ifreq = {};
+      get_ifr_name(ifreq.ifr_name,
+                   command.ioctl_real().siocsetroutermode().ifr_name());
+      ifreq.ifr_ifru.ifru_intval =
+          command.ioctl_real().siocsetroutermode().mode();
+      ioctl_wrapper(command.ioctl_real().fd(), siocsetroutermode_val,
+                    (caddr_t)&ifreq, nullptr);
+      break;
+    }
+    case IoctlReal::kSiocsifvlan: {
+      struct ifreq ifreq = {};
+      get_ifr_name(ifreq.ifr_name,
+                   command.ioctl_real().siocsifvlan().ifr_name());
+      ioctl_wrapper(command.ioctl_real().fd(), siocsifvlan_val,
                     (caddr_t)&ifreq, nullptr);
       break;
     }

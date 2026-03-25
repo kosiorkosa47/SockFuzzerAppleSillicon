@@ -35,4 +35,17 @@ _ioctls
 _num_ioctls
 _siocaifaddr_in6_64
 _siocsifflags
+_siocsifmtu_val
+_siocaddmulti_val
+_siocdelmulti_val
+_siocprotoattach_val
+_siocprotodetach_val
+_siocsifaddr_val
+_diocstart_val
+_diocstop_val
+_siocsetroutermode_val
+_siocsifvlan_val
 _real_copyout
+_sendmsg_wrapper
+_necp_match_policy_wrapper
+_kmem_mb_reset_pages
