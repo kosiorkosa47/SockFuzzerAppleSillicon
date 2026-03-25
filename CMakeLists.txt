@@ -626,10 +626,9 @@ if(APPLE)
   add_custom_command(
     OUTPUT libxnu_relocatable.o
     COMMAND ld -r -arch ${CMAKE_SYSTEM_PROCESSOR} $<TARGET_OBJECTS:bsd> $<TARGET_OBJECTS:osfmk> -o libxnu_relocatable_raw.o
-    COMMAND nmedit -s ${CMAKE_CURRENT_BINARY_DIR}/xnu_exported_symbols.txt -p libxnu_relocatable_raw.o -o libxnu_relocatable.o
+    COMMAND ${CMAKE_COMMAND} -E env bash -c "nm -gU libxnu_relocatable_raw.o | awk '{print $$NF}' | sort -u > _all_syms.txt && grep -Fx -f ${CMAKE_CURRENT_BINARY_DIR}/xnu_exported_symbols.txt _all_syms.txt > _filtered_syms.txt || cp ${CMAKE_CURRENT_BINARY_DIR}/xnu_exported_symbols.txt _filtered_syms.txt && nmedit -s _filtered_syms.txt -p libxnu_relocatable_raw.o -o libxnu_relocatable.o"
     DEPENDS $<TARGET_OBJECTS:bsd> $<TARGET_OBJECTS:osfmk> ${CMAKE_CURRENT_BINARY_DIR}/xnu_exported_symbols.txt
     COMMAND_EXPAND_LISTS
-    VERBATIM
     COMMENT "Creating relocatable XNU object with localized symbols"
   )
   add_custom_target(xnu_obj DEPENDS libxnu_relocatable.o)
@@ -774,7 +773,9 @@ if(NOT DEFINED ENV{SANITIZER})
     )
     add_dependencies(fake_impls_test xnu_obj)
   else()
+    target_compile_options(fake_impls_test PRIVATE -fsanitize=address,fuzzer-no-link)
     target_link_libraries(fake_impls_test
+      -fsanitize=address
       ${CMAKE_CURRENT_BINARY_DIR}/libxnu_relocatable.o
       protobuf-mutator ${Protobuf_LIBRARIES} libbsd pthread
     )
