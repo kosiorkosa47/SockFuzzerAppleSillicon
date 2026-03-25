@@ -33,14 +33,14 @@
 
 typedef void* thread_t;
 
+// Thread storage — must be declared before current_thread uses it.
+char fake_thread[4096];
+
 thread_t current_thread() { return (thread_t)fake_thread; }
 
 kern_return_t thread_policy_set() {
     return KERN_SUCCESS;
 }
-
-// TODO: mock data here
-char fake_thread[4096];
 
 // let caller read/write to fake thread
 void* get_bsdthread_info(thread_t thread) { return fake_thread; }

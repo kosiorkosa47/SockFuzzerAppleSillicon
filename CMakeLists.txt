@@ -558,18 +558,13 @@ endif()
 # assembly. The startup code is the kernel bootstrap path and is never
 # executed by the fuzzer anyway — all needed symbols from startup.c are
 # stubbed in osfmk_stubs.c.
-if(APPLE)
-  set(OSFMK_SOURCES
-    fuzz/fakes/zalloc.c
-    fuzz/fakes/osfmk_stubs.c 
-  )
-else()
-  set(OSFMK_SOURCES
-    fuzz/fakes/zalloc.c
-    fuzz/fakes/osfmk_stubs.c 
-    third_party/xnu/osfmk/kern/startup.c
-  )
-endif()
+# Note: osfmk/kern/startup.c requires full XNU osfmk headers (pmap.h, etc.)
+# which are not available on Linux. We use startup_trampoline.c on both
+# platforms as a portable replacement.
+set(OSFMK_SOURCES
+  fuzz/fakes/zalloc.c
+  fuzz/fakes/osfmk_stubs.c
+)
 
 set(BSD_INCLUDES
     ${XNU_INCLUDES} third_party/xnu/BUILD/obj/DEBUG_X86_64/bsd/DEBUG
