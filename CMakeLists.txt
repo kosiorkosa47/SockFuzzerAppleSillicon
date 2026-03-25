@@ -778,7 +778,7 @@ if(NOT DEFINED ENV{SANITIZER})
       ${CMAKE_CURRENT_BINARY_DIR}/libxnu_relocatable.o
       protobuf-mutator ${Protobuf_LIBRARIES} libbsd pthread
     )
-    add_dependencies(fake_impls_test xnu_obj)
+    add_dependencies(fake_impls_test bsd osfmk)
   endif()
   add_test(NAME fake_impls_test COMMAND fake_impls_test)
 endif()
@@ -820,6 +820,7 @@ if(NOT DEFINED ENV{SANITIZER} AND APPLE)
     COMMENT "Creating coverage-instrumented XNU object"
   )
   add_custom_target(xnu_cov_obj DEPENDS libxnu_cov_relocatable.o)
+  add_dependencies(xnu_cov_obj bsd_cov osfmk_cov)
 
   add_library(startup_trampoline_cov OBJECT fuzz/fakes/startup_trampoline.c)
   target_compile_options(startup_trampoline_cov PRIVATE -g
