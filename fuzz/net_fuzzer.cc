@@ -618,8 +618,34 @@ void DoIp4Packet(const Ip4Packet &packet) {
 }
 
 void DoIp6Packet(const Ip6Packet &packet) {
-  size_t expected_size = packet.data().size();
+  std::string ext_data;
+
+  // Build extension header chain.
+  for (const auto &ext : packet.ext_headers()) {
+    switch (ext.header_case()) {
+      case Ip6ExtHeader::kRouting:
+        ext_data += get_ip6_route_hdr(ext.routing());
+        break;
+      case Ip6ExtHeader::kFragment:
+        ext_data += get_ip6_frag_hdr(ext.fragment());
+        break;
+      case Ip6ExtHeader::kHopByHop:
+        ext_data += get_ip6_ext(ext.hop_by_hop());
+        break;
+      case Ip6ExtHeader::kDestination:
+        ext_data += get_ip6_ext(ext.destination());
+        break;
+      case Ip6ExtHeader::kRaw:
+        ext_data += ext.raw();
+        break;
+      case Ip6ExtHeader::HEADER_NOT_SET:
+        break;
+    }
+  }
+
+  size_t expected_size = ext_data.size() + packet.data().size();
   std::string packet_s = get_ip6_hdr(packet.ip6_hdr(), expected_size);
+  packet_s += ext_data;
   packet_s += packet.data();
 
   void *mbuf_data = get_mbuf_data(packet_s.data(), packet_s.size(), PKTF_LOOP);
@@ -818,6 +844,26 @@ void HandleSetSockOpt(const Command &command) {
         val_data = std::string((char *)&tv, (char *)&tv + sizeof(tv));
         break;
       }
+      case SockOptVal::kIpv6Mreq: {
+        struct {
+          struct in6_addr ipv6mr_multiaddr;
+          unsigned int ipv6mr_interface;
+        } m6 = {};
+        get_in6_addr(&m6.ipv6mr_multiaddr, sov.ipv6_mreq().ipv6mr_multiaddr());
+        m6.ipv6mr_interface = sov.ipv6_mreq().ipv6mr_interface();
+        val_data = std::string((char *)&m6, (char *)&m6 + sizeof(m6));
+        break;
+      }
+      case SockOptVal::kIn6Pktinfo: {
+        struct {
+          struct in6_addr ipi6_addr;
+          unsigned int ipi6_ifindex;
+        } pi = {};
+        get_in6_addr(&pi.ipi6_addr, sov.in6_pktinfo().ipi6_addr());
+        pi.ipi6_ifindex = sov.in6_pktinfo().ipi6_ifindex();
+        val_data = std::string((char *)&pi, (char *)&pi + sizeof(pi));
+        break;
+      }
       case SockOptVal::VAL_NOT_SET:
         break;
     }
@@ -971,12 +1017,21 @@ void HandleSendmsg(const Command &command, int &retval) {
     sockaddr_s = get_sockaddr(sm.to());
   }
 
-  // Build a minimal user64_msghdr with the data
+  // Build iovec from the proto data field.
+  struct {
+    user64_addr_t iov_base;
+    uint64_t iov_len;
+  } iov = {};
+  iov.iov_base = (user64_addr_t)sm.data().data();
+  iov.iov_len = sm.data().size();
+
   user64_msghdr msg = {};
   if (!sockaddr_s.empty()) {
     msg.msg_name = (user64_addr_t)sockaddr_s.data();
     msg.msg_namelen = sockaddr_s.size();
   }
+  msg.msg_iov = (user64_addr_t)&iov;
+  msg.msg_iovlen = 1;
 
   sendmsg_wrapper(sm.s(), (caddr_t)&msg, sm.flags(), &retval);
 }
@@ -1162,8 +1217,30 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         break;
       }
       case Command::kRecvmsg: {
-        // TODO(upstream): fuzz this msg field
+        uint32_t buf_size = command.recvmsg().buf_size() % 4096;
+        uint32_t name_size = command.recvmsg().name_size() % 256;
+        uint32_t control_size = command.recvmsg().control_size() % 1024;
+        if (buf_size == 0) buf_size = 128;
+
+        std::unique_ptr<char[]> buf(new char[buf_size]);
+        std::unique_ptr<char[]> name(new char[name_size + 1]);
+        std::unique_ptr<char[]> control(new char[control_size + 1]);
+
+        struct {
+          user64_addr_t iov_base;
+          uint64_t iov_len;
+        } iov = {};
+        iov.iov_base = (user64_addr_t)buf.get();
+        iov.iov_len = buf_size;
+
         user64_msghdr msg = {};
+        msg.msg_name = name_size > 0 ? (user64_addr_t)name.get() : 0;
+        msg.msg_namelen = name_size;
+        msg.msg_iov = (user64_addr_t)&iov;
+        msg.msg_iovlen = 1;
+        msg.msg_control = control_size > 0 ? (user64_addr_t)control.get() : 0;
+        msg.msg_controllen = control_size;
+
         recvmsg_wrapper(command.recvmsg().s(), (struct msghdr *)&msg,
                         command.recvmsg().flags(), &retval);
         break;

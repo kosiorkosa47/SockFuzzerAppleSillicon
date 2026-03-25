@@ -301,8 +301,10 @@ message RecvfromNocancel {
 
 message Recvmsg {
   optional FileDescriptor s = 1;
-  // optional StructMsghdr msg = 2;
   optional uint32 flags = 2;
+  optional uint32 buf_size = 3;
+  optional uint32 name_size = 4;
+  optional uint32 control_size = 5;
 }
 
 // message RecvmsgNocancel {
@@ -656,9 +658,20 @@ message Ip4Packet {
   optional bytes data = 2;
 }
 
+message Ip6ExtHeader {
+  oneof header {
+    Ip6RtHdr routing = 1;
+    Ip6FragHdr fragment = 2;
+    Ip6Ext hop_by_hop = 3;
+    Ip6Ext destination = 4;
+    bytes raw = 5;
+  }
+}
+
 message Ip6Packet {
   optional Ip6Hdr ip6_hdr = 1;
-  optional bytes data = 2;
+  repeated Ip6ExtHeader ext_headers = 2;
+  optional bytes data = 3;
 }
 
 message Ip6Ext {
@@ -1524,6 +1537,16 @@ message SockOptTimeval {
   required int32 tv_usec = 2;
 }
 
+message SockOptIpv6Mreq {
+  required In6Addr ipv6mr_multiaddr = 1;
+  required uint32 ipv6mr_interface = 2;
+}
+
+message SockOptIn6Pktinfo {
+  required In6Addr ipi6_addr = 1;
+  required uint32 ipi6_ifindex = 2;
+}
+
 message SockOptVal {
   oneof val {
     bytes raw = 1;
@@ -1531,6 +1554,8 @@ message SockOptVal {
     SockOptLinger linger = 3;
     SockOptMreq mreq = 4;
     SockOptTimeval timeval = 5;
+    SockOptIpv6Mreq ipv6_mreq = 6;
+    SockOptIn6Pktinfo in6_pktinfo = 7;
   }
 }
 
