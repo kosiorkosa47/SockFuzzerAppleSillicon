@@ -41,9 +41,13 @@
 #include <kern/assert.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdarg.h>
 #include <stdint.h>
+#include <string.h>
 
 int printf(const char* format, ...);
+int vprintf(const char* format, va_list ap);
+extern void get_fuzzed_bytes(void* addr, size_t bytes);
 
 // Convenience macro — logs which stub was hit before aborting.
 // This makes it immediately obvious which unimplemented function
@@ -103,7 +107,10 @@ STUB_ABORT(bsd_timeout)
 
 STUB_ABORT(bsdinit_task)
 
-STUB_ABORT(cc_rand_generate)
+int cc_rand_generate(void *out, size_t outlen) {
+  get_fuzzed_bytes(out, outlen);
+  return 0;
+}
 
 STUB_ABORT(check_actforsig)
 
@@ -127,7 +134,13 @@ STUB_ABORT(coalition_is_leader)
 
 STUB_ABORT(copyin_word)
 
-STUB_ABORT(copyinstr)
+int copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done) {
+  if (len == 0) { if (done) *done = 0; return 0; }
+  memset(kaddr, 0, len);
+  ((char *)kaddr)[0] = 'x';
+  if (done) *done = 2;
+  return 0;
+}
 
 STUB_ABORT(copypv)
 
@@ -139,9 +152,9 @@ STUB_ABORT(cs_identity_get)
 
 STUB_ABORT(current_task)
 
-STUB_ABORT(deflate)
+int deflate(void *strm, int flush) { return 1; /* Z_STREAM_END */ }
 
-STUB_ABORT(deflateReset)
+int deflateReset(void *strm) { return 0; }
 
 STUB_ABORT(enodev)
 
@@ -177,9 +190,9 @@ STUB_ABORT(hostname)
 
 STUB_ABORT(hz)
 
-STUB_ABORT(inflate)
+int inflate(void *strm, int flush) { return 1; /* Z_STREAM_END */ }
 
-STUB_ABORT(inflateReset)
+int inflateReset(void *strm) { return 0; }
 
 STUB_ABORT(initproc)
 
@@ -281,7 +294,9 @@ int msleep0() { return 0; }
 
 int msleep1() { return 0; }
 
-STUB_ABORT(nanoseconds_to_absolutetime)
+void nanoseconds_to_absolutetime(uint64_t nanoseconds, uint64_t *result) {
+  *result = nanoseconds;
+}
 
 STUB_ABORT(nanotime)
 
@@ -638,7 +653,15 @@ STUB_ABORT(clock_get_system_microtime)
 
 STUB_ABORT(thread_call_enter1_delayed)
 
-STUB_ABORT(panic)
+void panic(const char *fmt, ...) {
+  printf("KERNEL PANIC: ");
+  va_list ap;
+  va_start(ap, fmt);
+  vprintf(fmt, ap);
+  va_end(ap);
+  printf("\n");
+  __builtin_trap();
+}
 
 struct os_log_s {
   int a;
@@ -856,12 +879,27 @@ STUB_ABORT(registerSleepWakeInterest)
 STUB_ABORT(absolutetime_to_microtime)
 
 STUB_ABORT(thread_abort)
-STUB_ABORT(strnstr)
+char *strnstr(const char *s, const char *find, size_t slen) {
+  size_t flen = strlen(find);
+  if (flen == 0) return (char *)s;
+  for (; slen >= flen; s++, slen--) {
+    if (s[0] == find[0] && memcmp(s, find, flen) == 0)
+      return (char *)s;
+  }
+  return NULL;
+}
 STUB_ABORT(thread_abort_safely)
 
 uint32_t crc32(uint32_t crc, const void *buf, size_t size) {
-  assert(false);
-  return 0;
+  const uint8_t *p = (const uint8_t *)buf;
+  crc = ~crc;
+  for (size_t i = 0; i < size; i++) {
+    crc ^= p[i];
+    for (int j = 0; j < 8; j++) {
+      crc = (crc >> 1) ^ (0xEDB88320 & (-(crc & 1)));
+    }
+  }
+  return ~crc;
 }
 
 STUB_ABORT(cs_get_cdhash)

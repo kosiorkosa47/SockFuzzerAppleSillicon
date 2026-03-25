@@ -760,6 +760,30 @@ target_compile_options(
 )
 
 # --------------------------------------------------------------------------
+# Unit tests
+# --------------------------------------------------------------------------
+if(NOT DEFINED ENV{SANITIZER})
+  add_executable(fake_impls_test fuzz/fakes/fake_impls_test.cc)
+  target_compile_options(fake_impls_test PRIVATE -std=c++17 -g)
+  target_include_directories(fake_impls_test PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+  if(APPLE)
+    target_link_libraries(fake_impls_test
+      ${CMAKE_CURRENT_BINARY_DIR}/libxnu_relocatable.o
+      $<TARGET_OBJECTS:startup_trampoline>
+      protobuf-mutator ${Protobuf_LIBRARIES}
+      "-Wl,-undefined,dynamic_lookup"
+    )
+    add_dependencies(fake_impls_test xnu_obj)
+  else()
+    target_link_libraries(fake_impls_test
+      libxnu_relocatable.o protobuf-mutator ${Protobuf_LIBRARIES} libbsd pthread
+    )
+  endif()
+  add_test(NAME fake_impls_test COMMAND fake_impls_test)
+  enable_testing()
+endif()
+
+# --------------------------------------------------------------------------
 # Coverage builds — Linux and macOS
 # --------------------------------------------------------------------------
 if(NOT DEFINED ENV{SANITIZER} AND APPLE)

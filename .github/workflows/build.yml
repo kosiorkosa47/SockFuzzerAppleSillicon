@@ -36,8 +36,12 @@ jobs:
           mkdir -p corpus crashes
           ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=0 \
             timeout 10 ./net_fuzzer corpus/ -artifact_prefix=crashes/ \
-            -max_total_time=5 || true
-          echo "Smoke test passed — fuzzer ran without immediate crash"
+            -max_total_time=5 2>&1; EXIT_CODE=$?
+          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 124 ]; then
+            echo "FAIL: fuzzer exited with code $EXIT_CODE"
+            exit 1
+          fi
+          echo "Smoke test passed (exit=$EXIT_CODE)"
 
   build-linux:
     runs-on: ubuntu-latest
@@ -66,5 +70,9 @@ jobs:
           mkdir -p corpus crashes
           ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=0 \
             timeout 10 ./net_fuzzer corpus/ -artifact_prefix=crashes/ \
-            -max_total_time=5 || true
-          echo "Smoke test passed — fuzzer ran without immediate crash"
+            -max_total_time=5 2>&1; EXIT_CODE=$?
+          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 124 ]; then
+            echo "FAIL: fuzzer exited with code $EXIT_CODE"
+            exit 1
+          fi
+          echo "Smoke test passed (exit=$EXIT_CODE)"

@@ -205,9 +205,15 @@ int proc_suser() { return get_fuzzed_bool() ? 1 : 0; }
 
 void _os_log_internal() {}
 
-void hw_atomic_add() {}
+uint32_t hw_atomic_add(volatile uint32_t *target, uint32_t delta) {
+  *target += delta;
+  return *target;
+}
 
-void hw_atomic_sub() {}
+uint32_t hw_atomic_sub(volatile uint32_t *target, uint32_t delta) {
+  *target -= delta;
+  return *target;
+}
 
 void lck_mtx_destroy() {}
 
@@ -471,7 +477,7 @@ void wakeup_one() {}
 
 int lck_mtx_try_lock_spin() { return 1; }
 
-void absolutetime_to_nanoseconds(uint64_t in, uint64_t* out) { *out = 0; }
+void absolutetime_to_nanoseconds(uint64_t in, uint64_t* out) { *out = in; }
 
 void nwk_wq_enqueue(struct nwk_wq_entry* nwk_item) {
   nwk_item->func(nwk_item->arg);

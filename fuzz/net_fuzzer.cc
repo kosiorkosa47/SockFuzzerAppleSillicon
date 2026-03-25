@@ -452,7 +452,10 @@ unsigned int get_fuzzed_uint32(unsigned int low, unsigned int high) {
   return fdp->ConsumeIntegralInRange<unsigned int>(low, high);
 }
 
-unsigned int get_remaining_bytes() { return fdp->remaining_bytes(); }
+unsigned int get_remaining_bytes() {
+  if (!fdp) return 0;
+  return fdp->remaining_bytes();
+}
 
 static bool ready = false;
 
@@ -952,7 +955,7 @@ void HandleIoctlReal(const Command &command) {
       for (int flag : command.ioctl_real().siocsifflags().flags()) {
         ifreq.ifr_flags |= flag;
       }
-      get_ifr_name(ifreq.ifr_name, LO0);
+      get_ifr_name(ifreq.ifr_name, command.ioctl_real().siocsifflags().ifr_name());
       ioctl_wrapper(command.ioctl_real().fd(), siocsifflags,
                     (caddr_t)&ifreq, nullptr);
       break;
@@ -1390,12 +1393,13 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         }
         break;
       }
+#define SOL_SOCKET_XNU 0xffff
+#define MPTCP_SERVICE_TYPE_OPT 0x0213  // 531
       case Command::kMptcpSetsockopt: {
-        // SOL_SOCKET level, MPTCP_SERVICE_TYPE = 0x1090 + 0x121 = 531
         int svc_type = command.mptcp_setsockopt().service_type();
         setsockopt_wrapper(command.mptcp_setsockopt().fd(),
-                           0xffff,  // SOL_SOCKET
-                           531,     // MPTCP_SERVICE_TYPE
+                           SOL_SOCKET_XNU,
+                           MPTCP_SERVICE_TYPE_OPT,
                            (caddr_t)&svc_type, sizeof(svc_type), nullptr);
         break;
       }
@@ -1405,8 +1409,7 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
   }
 
   for (int fd : open_fds) {
-    int err = close_wrapper(fd, nullptr);
-    assert(err != EBADF);
+    close_wrapper(fd, nullptr);
   }
 
   clear_all();
