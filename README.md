@@ -141,13 +141,47 @@ available flags (`-jobs`, `-workers`, `-max_len`, etc.).
 
 ## Coverage Reports
 
-On Linux, a `net_cov` binary is built with LLVM source-based coverage:
+On Linux and macOS, a `net_cov` binary is built with LLVM source-based coverage:
 
 ```bash
 ./net_cov corpus
 llvm-profdata merge -sparse default.profraw -o default.profdata
 llvm-cov show -format=html -output-dir=report -instr-profile=default.profdata net_cov
+llvm-cov report -instr-profile=default.profdata net_cov  # summary table
 ```
+
+### Attack Surface Coverage
+
+| Subsystem | Source Files | Status |
+|---|---|---|
+| TCP (v4/v6) | tcp_input, tcp_output, tcp_subr, tcp_timer | Active — with wire-format options |
+| UDP (v4/v6) | udp_usrreq, udp6_usrreq, udp6_output | Active |
+| ICMP (v4/v6) | ip_icmp, icmp6 | Active |
+| IPv6 extension headers | frag6, dest6, route6 | Active — chained headers |
+| PF firewall | pf, pf_ioctl, pf_norm, pf_table | Active — structured ioctls |
+| NECP | necp, necp_client | Active — all 5 operations |
+| MPTCP | mptcp, mptcp_opt, mptcp_subr | Active — socket + setsockopt |
+| IPsec | ipsec, esp_*, ah_* | Partial — crypto stubs are no-ops |
+| Socket lifecycle | uipc_socket, uipc_socket2, uipc_syscalls | Active |
+| UNIX domain | uipc_usrreq | Active — structured paths |
+| Pipes | sys_pipe | Active |
+| kqueue | kern_event | Planned |
+| Content filter | content_filter | Planned |
+| Flow divert | flow_divert | Planned |
+
+## Comparison with Other Tools
+
+| Feature | SockFuzzer | syzkaller | Fuzzilli |
+|---|---|---|---|
+| **Target** | XNU network stack | Linux syscalls | JavaScript engines |
+| **Approach** | Userland lib + libFuzzer | VM + coverage | JIT mutation |
+| **Platform** | macOS + Linux | Linux | Cross-platform |
+| **Structure-aware** | Protobuf grammar | Syzlang grammar | JS AST |
+| **XNU support** | Native | None | None |
+| **State isolation** | clear_all() + fork server | Per-VM | Per-process |
+| **Packet injection** | Direct ip_input() | Via network stack | N/A |
+| **Speed** | ~5K-50K exec/sec | ~100-1K exec/sec | ~1K exec/sec |
+| **Apple Silicon** | Native arm64 | N/A | N/A |
 
 ## Importing Upstream XNU Releases
 
