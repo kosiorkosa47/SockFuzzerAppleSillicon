@@ -53,6 +53,7 @@ ThreadHandle CoroutineExecutor::CreateThread(std::function<void()> target) {
     abort();
   }
   if (mprotect(mapping, 0x1000, PROT_NONE)) {
+    munmap(mapping, 0x1000 + KERNEL_STACK_SIZE);
     abort();
   }
   cothread_t thread = co_derive(static_cast<uint8_t *>(mapping) + 0x1000,
@@ -81,7 +82,7 @@ void CoroutineExecutor::CallPendingFunctionThenSwap() {
 
   pending_function();
 
-  // TODO(nedwill): only notify destroyed once the thread actually gets
+  // TODO(upstream): only notify destroyed once the thread actually gets
   // destroyed explicitly
   callbacks()->ThreadDestroyed(reinterpret_cast<ThreadHandle>(active));
   SwitchToMainThread();
@@ -107,7 +108,7 @@ void CoroutineExecutor::SwitchTo(ThreadHandle handle) {
   }
 
 #if __has_feature(address_sanitizer)
-  // TODO(nedwill): track first argument to support stack use after return
+  // TODO(upstream): track first argument to support stack use after return
   // detection
   __sanitizer_start_switch_fiber(nullptr, cothread, KERNEL_STACK_SIZE);
 #endif
@@ -128,7 +129,7 @@ ThreadHandle CoroutineExecutor::GetMainThreadHandle() {
   return reinterpret_cast<ThreadHandle>(main_thread_);
 }
 
-// TODO(nedwill): support naming fibers
+// TODO(upstream): support naming fibers
 void CoroutineExecutor::SetThreadName(ThreadHandle handle,
                                       const std::string &name) {}
 

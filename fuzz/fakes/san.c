@@ -40,18 +40,19 @@ void __asan_storeN(unsigned long addr, size_t size);
 void NOINLINE
 kasan_check_range(const void *x, size_t sz, access_t access)
 {
-  int read = access & TYPE_READ;
-  int write = access & TYPE_WRITE;
+  bool handled = false;
 
   if (access & TYPE_READ) {
     __asan_loadN((unsigned long)x, sz);
+    handled = true;
   }
 
   if (access & TYPE_WRITE) {
     __asan_storeN((unsigned long)x, sz);
-  }  
+    handled = true;
+  }
 
-  if (!read && !write) {  
+  if (!handled) {
     printf("Unhandled kasan access type %d\n", access);
     assert(false);
   }
