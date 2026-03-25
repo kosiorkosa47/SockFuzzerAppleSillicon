@@ -262,8 +262,12 @@ message Command {
     MptcpSocket mptcp_socket = 42;
     MptcpSetsockopt mptcp_setsockopt = 43;
     SendtoNocancel sendto_nocancel = 44;
+    Kqueue kqueue = 45;
   }
 }
+
+// --- kqueue (B4) ---
+message Kqueue {}
 
 // --- MPTCP (#47) ---
 

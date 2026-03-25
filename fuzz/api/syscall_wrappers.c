@@ -421,4 +421,9 @@ __attribute__((visibility("default"))) int socketpair_wrapper(
   return socketpair(kernproc, &uap, retval);
 }
 
+__attribute__((visibility("default"))) int kqueue_wrapper(int* retval) {
+  struct kqueue_args uap = {};
+  return sys_kqueue(kernproc, &uap, retval);
+}
+
 #pragma clang diagnostic pop

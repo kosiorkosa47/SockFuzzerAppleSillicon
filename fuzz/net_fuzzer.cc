@@ -1484,6 +1484,15 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
                        (caddr_t)sockaddr_s.data(), size, &retval);
         break;
       }
+      case Command::kKqueue: {
+        int fd = 0;
+        int err = kqueue_wrapper(&fd);
+        if (err == 0) {
+          assert(open_fds.find(fd) == open_fds.end());
+          open_fds.insert(fd);
+        }
+        break;
+      }
       case Command::COMMAND_NOT_SET:
         break;
     }

@@ -123,5 +123,6 @@ int socket_delegate_wrapper(int domain, int type, int protocol, pid_t epid,
                             int* retval);
 int socketpair_wrapper(int domain, int type, int protocol, int* rsv,
                        int* retval);
+int kqueue_wrapper(int* retval);
 
 #endif  // SYSCALL_WRAPPERS_H_

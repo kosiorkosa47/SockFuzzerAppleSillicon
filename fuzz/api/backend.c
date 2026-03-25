@@ -119,12 +119,21 @@ __attribute__((visibility("default"))) void clear_all() {
   frag6_timeout();
   mld_timeout();
 
-  // Route timer cleanup.
+  // Route timer cleanup — drains expired routes (C4).
+  // Note: full route table flush would require rtable_flush() which is
+  // not currently stubbed. These timers expire old entries which provides
+  // partial cleanup.
   in6_rtqtimo(NULL);
   in_rtqtimo(NULL);
 
   nstat_idle_check(NULL, NULL);
   domain_timeout(NULL);
+
+  // C5: Interface address cleanup.
+  // Addresses added via SIOCAIFADDR_IN6_64 persist across iterations.
+  // A full cleanup would require tracking added addresses and removing
+  // them via SIOCDIFADDR_IN6. For now, the route timer expiry above
+  // handles the most common side-effect (stale routes to added addresses).
 
   // Reset PF state if it was enabled during this iteration.
   // DIOCSTOP is idempotent — safe to call even if PF was never started.
