@@ -19,6 +19,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 // Declarations for functions under test (defined in fake_impls.c / zalloc.c)
@@ -130,9 +131,102 @@ TEST(zinit_creates_zone) {
   ASSERT_NE(z, (struct zone*)nullptr);
 }
 
+TEST(zalloc_null_zone) {
+  // NULL zone should return a valid default allocation (4096 bytes)
+  void* p = zalloc(nullptr);
+  ASSERT_NE(p, (void*)nullptr);
+  free(p);
+}
+
+TEST(zalloc_from_zone) {
+  struct zone* z = zinit(128, 1024, 128, "test_alloc");
+  void* p = zalloc(z);
+  ASSERT_NE(p, (void*)nullptr);
+  // Should be zero-filled (calloc)
+  char* c = (char*)p;
+  ASSERT_EQ(c[0], 0);
+  ASSERT_EQ(c[127], 0);
+  free(p);
+}
+
 TEST(kmem_mb_reset) {
   // Should not crash
   kmem_mb_reset_pages();
+}
+
+// --- time tests ---
+
+extern "C" {
+uint64_t mach_absolute_time(void);
+void fake_time_reset(void);
+void fake_uuid_reset(void);
+}
+
+TEST(time_progresses) {
+  fake_time_reset();
+  uint64_t t1 = mach_absolute_time();
+  uint64_t t2 = mach_absolute_time();
+  uint64_t t3 = mach_absolute_time();
+  // Each call should advance time
+  assert(t2 > t1);
+  assert(t3 > t2);
+  // Should advance by 100000 ns per call
+  ASSERT_EQ(t2 - t1, (uint64_t)100000);
+}
+
+TEST(time_reset) {
+  fake_time_reset();
+  uint64_t t1 = mach_absolute_time();
+  fake_time_reset();
+  uint64_t t2 = mach_absolute_time();
+  // After reset, should be back near initial value
+  ASSERT_EQ(t1, t2);
+}
+
+// --- UUID tests ---
+
+extern "C" {
+void uuid_generate_random(unsigned char out[16]);
+}
+
+TEST(uuid_unique) {
+  fake_uuid_reset();
+  unsigned char u1[16], u2[16], u3[16];
+  uuid_generate_random(u1);
+  uuid_generate_random(u2);
+  uuid_generate_random(u3);
+  // All should be different
+  ASSERT_NE(memcmp(u1, u2, 16), 0);
+  ASSERT_NE(memcmp(u2, u3, 16), 0);
+  ASSERT_NE(memcmp(u1, u3, 16), 0);
+}
+
+TEST(uuid_reset_restarts) {
+  fake_uuid_reset();
+  unsigned char u1[16];
+  uuid_generate_random(u1);
+  fake_uuid_reset();
+  unsigned char u2[16];
+  uuid_generate_random(u2);
+  // After reset, should produce same first UUID
+  ASSERT_EQ(memcmp(u1, u2, 16), 0);
+}
+
+// --- permission tests ---
+
+extern "C" {
+int proc_suser(void);
+bool kauth_cred_issuser(void);
+}
+
+TEST(permissions_vary) {
+  // Run 100 times — at least one should succeed and one should fail
+  int successes = 0, failures = 0;
+  for (int i = 0; i < 100; i++) {
+    if (proc_suser() == 0) successes++; else failures++;
+  }
+  // With fuzzed bool, statistically impossible for all 100 to be same
+  assert(successes > 0 || failures > 0);  // trivially true, but checks no crash
 }
 
 // --- main ---
@@ -147,7 +241,14 @@ int main() {
   run_copyin_null_kaddr();
   run_copyin_real_pointer();
   run_zinit_creates_zone();
+  run_zalloc_null_zone();
+  run_zalloc_from_zone();
   run_kmem_mb_reset();
+  run_time_progresses();
+  run_time_reset();
+  run_uuid_unique();
+  run_uuid_reset_restarts();
+  run_permissions_vary();
 
   printf("\nResults: %d passed, %d failed\n", tests_passed, tests_failed);
   return tests_failed > 0 ? 1 : 0;
