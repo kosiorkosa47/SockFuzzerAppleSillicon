@@ -103,18 +103,12 @@ int uuid_compare(const uuid_t uu1, const uuid_t uu2) {
   return memcmp(uu1, uu2, sizeof(uuid_t));
 }
 
-// TODO(upstream): this shouldn't return the same value
-// within the same fuzz session (use a counter and reset)
+static uint32_t g_uuid_counter = 0;
+
 void uuid_generate_random(uuid_t out) {
-  if (get_fuzzed_bool()) {
-    memcpy(out, "0000000000000000", 16);
-    return;
-  }
-  if (get_fuzzed_bool()) {
-    memcpy(out, "1111111111111111", 16);
-    return;
-  }
-  memcpy(out, "2222222222222222", 16);
+  memset(out, 0, sizeof(uuid_t));
+  g_uuid_counter++;
+  memcpy(out, &g_uuid_counter, sizeof(g_uuid_counter));
 }
 
 void uuid_copy(uuid_t dst, const uuid_t src) {
@@ -174,14 +168,16 @@ int mac_socket_check_bind() { return 0; }
 
 int mac_file_check_ioctl() { return 0; }
 
-int deflateInit2_() { return 1; }
-int inflateInit2_() { return 1; }
+int deflateInit2_() { return 0; }  // Z_OK
+int inflateInit2_() { return 0; }  // Z_OK
 
-bool kauth_cred_issuser() { return true; }
+bool kauth_cred_issuser() { return !get_fuzzed_bool(); }
 
 unsigned long RandomULong() {
-  // returning 0 here would be a failure
-  return 1;
+  unsigned long val;
+  get_fuzzed_bytes(&val, sizeof(val));
+  // Avoid returning 0 — XNU treats it as failure in some callers.
+  return val ? val : 1;
 }
 
 // TODO: threading
@@ -199,8 +195,7 @@ void kprintf() { return; }
 
 void thread_deallocate() {}
 
-// we are root
-int proc_suser() { return 0; }
+int proc_suser() { return get_fuzzed_bool() ? 1 : 0; }
 
 void _os_log_internal() {}
 
@@ -214,7 +209,7 @@ int mac_socket_check_ioctl() { return 0; }
 
 bool proc_is64bit() { return true; }
 
-int priv_check_cred() { return 0; }
+int priv_check_cred() { return get_fuzzed_bool() ? 1 : 0; }
 
 bool lck_rw_try_lock_exclusive() { return true; }
 
@@ -285,13 +280,13 @@ int ml_get_max_cpus(void) { return 1; }
 
 void clock_interval_to_deadline(uint32_t interval, uint32_t scale_factor,
                                 uint64_t* result) {
-  *result = 0;
+  *result = g_fake_time_counter + (uint64_t)interval * scale_factor;
 }
 
 void clock_interval_to_absolutetime_interval(uint32_t interval,
                                              uint32_t scale_factor,
                                              uint64_t* result) {
-  *result = 0;
+  *result = (uint64_t)interval * scale_factor;
 }
 
 void* thread_call_allocate_with_options() { return (void*)1; }
@@ -384,11 +379,13 @@ copyin(const user_addr_t uaddr, void *kaddr, size_t len) {
   return 0;
 }
 
-void SHA1Final() {}
+void SHA1Final(unsigned char *digest, void *ctx) {
+  get_fuzzed_bytes(digest, 20);  // SHA1 digest is 20 bytes
+}
 
-void SHA1Init() {}
+void SHA1Init(void *ctx) {}
 
-void SHA1Update() {}
+void SHA1Update(void *ctx, const void *data, unsigned int len) {}
 
 void* thread_call_allocate_with_priority() { return (void*)1; }
 
@@ -403,10 +400,10 @@ void timevalsub() {}
 
 void thread_call_enter_delayed() {}
 
-void MD5Init() {}
-void MD5Update() {}
+void MD5Init(void *ctx) {}
+void MD5Update(void *ctx, const void *data, unsigned int len) {}
 void MD5Final(unsigned char* digest, void* ctx) {
-  memset(digest, 0, 16);  // MD5 digest is 16 bytes
+  get_fuzzed_bytes(digest, 16);  // MD5 digest is 16 bytes
 }
 
 void proc_rele() {}

@@ -75,7 +75,7 @@ STUB_ABORT(act_set_astkevent)
 
 STUB_ABORT(addupc_task)
 
-STUB_ABORT(assert_wait)
+int assert_wait() { return 0; }
 
 STUB_ABORT(audit_arg_addr)
 
@@ -273,11 +273,13 @@ STUB_ABORT(memorystatus_filtops)
 
 STUB_ABORT(memorystatus_kevent_init)
 
-STUB_ABORT(msleep)
+int msleep(void *chan, void *mtx, int pri, const char *wmesg, void *ts) {
+  return 0;  // Simulate immediate wakeup
+}
 
-STUB_ABORT(msleep0)
+int msleep0() { return 0; }
 
-STUB_ABORT(msleep1)
+int msleep1() { return 0; }
 
 STUB_ABORT(nanoseconds_to_absolutetime)
 
@@ -411,9 +413,9 @@ STUB_ABORT(thread_add_ipc_override)
 
 STUB_ABORT(thread_add_sync_ipc_override)
 
-STUB_ABORT(thread_block)
+int thread_block() { return 0; }
 
-STUB_ABORT(thread_block_parameter)
+int thread_block_parameter() { return 0; }
 
 STUB_ABORT(thread_call_cancel)
 
@@ -473,11 +475,11 @@ STUB_ABORT(timeout_with_leeway)
 
 STUB_ABORT(timespec_is_valid)
 
-STUB_ABORT(tsleep)
+int tsleep() { return 0; }
 
-STUB_ABORT(tsleep0)
+int tsleep0() { return 0; }
 
-STUB_ABORT(tsleep1)
+int tsleep1() { return 0; }
 
 STUB_ABORT(tstoabstime)
 
@@ -682,13 +684,13 @@ STUB_ABORT(nat464_translate_proto)
 
 STUB_ABORT(turnstile_cleanup)
 
-STUB_ABORT(thread_wakeup_prim)
+void thread_wakeup_prim() {}
 
 STUB_ABORT(waitq_wakeup64_thread)
 
 STUB_ABORT(turnstile_prepare)
 
-STUB_ABORT(assert_wait_deadline)
+int assert_wait_deadline() { return 0; }
 
 STUB_ABORT(nat464_synthesize_ipv4)
 
