@@ -211,7 +211,9 @@ __attribute__((visibility("default"))) struct mbuf* get_mbuf_data(
   struct mbuf* mbuf_data =
       mbuf_create((const uint8_t*)data, size, true, false, MT_DATA, pktflags);
 
-  // This indicates where the packet came from.
+  // B6: Interface selection. Currently always loopback.
+  // When fake_ifp is initialized, use pktflags to select:
+  // PKTF_LOOP = loopback, otherwise = fake ethernet interface.
   mbuf_pkthdr_setrcvif((mbuf_t)mbuf_data, lo_ifp);
   return mbuf_data;
 }

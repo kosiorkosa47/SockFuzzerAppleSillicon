@@ -375,6 +375,7 @@ message Sendmsg {
   required int32 flags = 3;
   optional SockAddr to = 4;
   optional bytes control = 5;  // ancillary data (cmsg): SCM_RIGHTS, IP_PKTINFO, etc.
+  repeated bytes extra_iovs = 6;  // additional scatter-gather segments
 }
 
 // message SendmsgNocancel {
@@ -762,6 +763,8 @@ message Packet {
   }
   // Optional: split packet across mbuf chain for boundary bug detection
   optional MbufLayout mbuf_layout = 1002;
+  // Select receive interface: true = fake ethernet, false/unset = loopback
+  optional bool use_ethernet_if = 1003;
 }
 
 message TcpPacket {

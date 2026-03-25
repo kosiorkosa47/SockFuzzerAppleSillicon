@@ -97,6 +97,25 @@ jobs:
           fi
           echo "Smoke test passed (exit=$EXIT_CODE)"
 
+      - name: Generate seed corpus
+        run: |
+          cd build
+          mkdir -p seed_corpus
+          ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=0 \
+            timeout 20 ./net_fuzzer seed_corpus -max_total_time=10 \
+            -dict=../net_fuzzer.dict 2>&1 | tail -3
+          echo "Seeds generated: $(find seed_corpus -type f | wc -l)"
+
+      - name: Check for crashes
+        run: |
+          cd build
+          if ls crashes/crash-* 1>/dev/null 2>&1; then
+            echo "CRASHES FOUND:"
+            ls -la crashes/crash-*
+            exit 1
+          fi
+          echo "No crashes found during smoke test"
+
       - name: Coverage report
         run: |
           cd build

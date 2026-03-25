@@ -1190,21 +1190,27 @@ void HandleSendmsg(const Command &command, int &retval) {
     sockaddr_s = get_sockaddr(sm.to());
   }
 
-  // Build iovec from the proto data field.
+  // Build iovec array from proto data + extra_iovs (B8: scatter-gather).
+  int niov = 1 + sm.extra_iovs_size();
+  if (niov > 8) niov = 8;  // cap to avoid excessive allocation
   struct {
     user64_addr_t iov_base;
     uint64_t iov_len;
-  } iov = {};
-  iov.iov_base = (user64_addr_t)sm.data().data();
-  iov.iov_len = sm.data().size();
+  } iovs[8] = {};
+  iovs[0].iov_base = (user64_addr_t)sm.data().data();
+  iovs[0].iov_len = sm.data().size();
+  for (int i = 1; i < niov; i++) {
+    iovs[i].iov_base = (user64_addr_t)sm.extra_iovs(i - 1).data();
+    iovs[i].iov_len = sm.extra_iovs(i - 1).size();
+  }
 
   user64_msghdr msg = {};
   if (!sockaddr_s.empty()) {
     msg.msg_name = (user64_addr_t)sockaddr_s.data();
     msg.msg_namelen = sockaddr_s.size();
   }
-  msg.msg_iov = (user64_addr_t)&iov;
-  msg.msg_iovlen = 1;
+  msg.msg_iov = (user64_addr_t)iovs;
+  msg.msg_iovlen = niov;
 
   if (sm.has_control() && !sm.control().empty()) {
     msg.msg_control = (user64_addr_t)sm.control().data();

@@ -196,6 +196,18 @@ git add BUILD/obj/EXPORT_HDRS EXTERNAL_HEADERS
 
 Update `CMakeLists.txt` if source paths changed.
 
+## Bugs Found
+
+This fuzzer is actively used for XNU kernel security research. Notable findings
+will be listed here after responsible disclosure periods expire.
+
+| Date | Component | Type | Status |
+|---|---|---|---|
+| — | — | — | Active fuzzing campaign in progress |
+
+If you find a bug using this fuzzer, please follow the disclosure policy in
+[SECURITY.md](SECURITY.md).
+
 ## Roadmap
 
 See the [milestones](https://github.com/kosiorkosa47/SockFuzzerAppleSillicon/milestones)
