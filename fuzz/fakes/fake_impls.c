@@ -249,10 +249,11 @@ int copyout(const void* kaddr, user_addr_t udaddr, size_t len) {
   if (!udaddr || udaddr == USERADDR_FUZZED || !real_copyout) {
     // Validate source is readable (ASAN will catch OOB).
     void* buf = malloc(len);
-    if (buf) {
-      memcpy(buf, kaddr, len);
-      free(buf);
+    if (!buf) {
+      return EFAULT_XNU;
     }
+    memcpy(buf, kaddr, len);
+    free(buf);
     return 0;
   }
 
@@ -317,15 +318,18 @@ uint64_t mach_absolute_time() {
 }
 
 void clock_get_calendar_microtime(uint32_t *secs, uint32_t *microsecs) {
+  g_fake_time_counter += 100000;
   *secs = (uint32_t)(g_fake_time_counter / 1000000000ULL);
   *microsecs = (uint32_t)((g_fake_time_counter / 1000ULL) % 1000000ULL);
 }
 
 void clock_get_uptime(uint64_t *result) {
+  g_fake_time_counter += 100000;
   *result = g_fake_time_counter;
 }
 
 void clock_get_system_microtime(uint32_t *secs, uint32_t *microsecs) {
+  g_fake_time_counter += 100000;
   *secs = (uint32_t)(g_fake_time_counter / 1000000000ULL);
   *microsecs = (uint32_t)((g_fake_time_counter / 1000ULL) % 1000000ULL);
 }
@@ -392,6 +396,9 @@ copyin(const user_addr_t uaddr, void *kaddr, size_t len) {
   }
   // USERADDR_FUZZED means "generate fuzzed bytes"; any other non-null
   // value is treated as a real pointer from the harness.
+  if (uaddr == USERADDR_NULL) {
+    return EFAULT_XNU;
+  }
   if (uaddr != USERADDR_FUZZED) {
     memcpy(kaddr, (void*)uaddr, len);
     return 0;
@@ -421,8 +428,23 @@ void lck_grp_free() {}
 
 void lck_rw_lock_exclusive() {}
 
-void timevaladd() {}
-void timevalsub() {}
+void timevaladd(struct timeval *t1, const struct timeval *t2) {
+  t1->tv_sec += t2->tv_sec;
+  t1->tv_usec += t2->tv_usec;
+  if (t1->tv_usec >= 1000000) {
+    t1->tv_sec++;
+    t1->tv_usec -= 1000000;
+  }
+}
+
+void timevalsub(struct timeval *t1, const struct timeval *t2) {
+  t1->tv_sec -= t2->tv_sec;
+  t1->tv_usec -= t2->tv_usec;
+  if (t1->tv_usec < 0) {
+    t1->tv_sec--;
+    t1->tv_usec += 1000000;
+  }
+}
 
 void thread_call_enter_delayed() {}
 
@@ -485,7 +507,11 @@ void OSBacktrace() {}
 
 void lck_grp_attr_setdefault() {}
 
-void nanouptime() {}
+void nanouptime(struct timespec *tp) {
+  g_fake_time_counter += 100000;
+  tp->tv_sec = g_fake_time_counter / 1000000000ULL;
+  tp->tv_nsec = g_fake_time_counter % 1000000000ULL;
+}
 
 void wakeup_one() {}
 

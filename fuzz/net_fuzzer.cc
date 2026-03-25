@@ -65,13 +65,16 @@ void get_in6_addr(struct in6_addr *sai, enum In6Addr addr) {
       break;
     }
     case IN6_ADDR_LOOPBACK: {
-      *sai = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (uint8_t)addr};
+      *sai = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
       assert(IN6_IS_ADDR_LOOPBACK(sai));
       break;
     }
-    case IN6_ADDR_REAL:
+    case IN6_ADDR_REAL: {
+      sai->s6_addr[15] = 2;  // arbitrary non-zero
+      break;
+    }
     case MAYBE_LOCALHOST: {
-      *sai = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (uint8_t)addr};
+      sai->s6_addr[15] = 1;  // ::1 = loopback
       break;
     }
     case IN6_ADDR_V4COMPAT: {
@@ -155,12 +158,18 @@ void get_in6_addr(struct in6_addr *sai, enum In6Addr addr) {
     case IN6_ADDR_LOCAL_ADDRESS: {
       // Discovered this address dynamically
       // fe80:0001:0000:0000:a8aa:aaaa:aaaa:aaaa
-      sai->s6_addr16[0] = 0xfe80;
-      sai->s6_addr16[1] = 0x0001;
-      sai->s6_addr16[4] = 0xa8aa;
-      sai->s6_addr16[5] = 0xaaaa;
-      sai->s6_addr16[6] = 0xaaaa;
-      sai->s6_addr16[7] = 0xaaaa;
+      sai->s6_addr[0] = 0xfe;
+      sai->s6_addr[1] = 0x80;
+      sai->s6_addr[2] = 0x00;
+      sai->s6_addr[3] = 0x01;
+      sai->s6_addr[8] = 0xa8;
+      sai->s6_addr[9] = 0xaa;
+      sai->s6_addr[10] = 0xaa;
+      sai->s6_addr[11] = 0xaa;
+      sai->s6_addr[12] = 0xaa;
+      sai->s6_addr[13] = 0xaa;
+      sai->s6_addr[14] = 0xaa;
+      sai->s6_addr[15] = 0xaa;
       break;
     }
   }
@@ -643,14 +652,12 @@ void DoNecpClientAction(const NecpClientAction &necp_client_action) {
 }
 
 void DoTcpInput(const TcpPacket &tcp_packet) {
-  std::string packet_s;
-
-  size_t expected_size =
-      sizeof(struct ip) + sizeof(struct tcphdr) + tcp_packet.data().size();
-  packet_s += get_ip_hdr(tcp_packet.ip_hdr(), expected_size);
-  packet_s += get_tcp_hdr(tcp_packet.tcp_hdr());
-  packet_s += tcp_packet.data();
-  assert(expected_size == packet_s.size());
+  std::string ip_hdr_s = get_ip_hdr(tcp_packet.ip_hdr(), 0);  // size filled below
+  std::string tcp_hdr_s = get_tcp_hdr(tcp_packet.tcp_hdr());
+  size_t total_size = ip_hdr_s.size() + tcp_hdr_s.size() + tcp_packet.data().size();
+  // Rewrite ip_len with correct total.
+  ip_hdr_s = get_ip_hdr(tcp_packet.ip_hdr(), total_size);
+  std::string packet_s = ip_hdr_s + tcp_hdr_s + tcp_packet.data();
 
   if (packet_s.empty()) {
     return;
@@ -666,12 +673,10 @@ void DoTcpInput(const TcpPacket &tcp_packet) {
 }
 
 void DoTcp6Input(const Tcp6Packet &tcp6_packet) {
-  std::string packet_s;
-
-  // TODO(upstream): support hop-by-hop and other options
-  size_t expected_size = sizeof(struct tcphdr) + tcp6_packet.data().size();
-  packet_s += get_ip6_hdr(tcp6_packet.ip6_hdr(), expected_size);
-  packet_s += get_tcp_hdr(tcp6_packet.tcp_hdr());
+  std::string tcp_hdr_s = get_tcp_hdr(tcp6_packet.tcp_hdr());
+  size_t expected_size = tcp_hdr_s.size() + tcp6_packet.data().size();
+  std::string packet_s = get_ip6_hdr(tcp6_packet.ip6_hdr(), expected_size);
+  packet_s += tcp_hdr_s;
   packet_s += tcp6_packet.data();
 
   if (packet_s.empty()) {

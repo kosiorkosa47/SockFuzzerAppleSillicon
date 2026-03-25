@@ -203,7 +203,7 @@ set(XNU_DEFINES
     # Since AddressSanitizer is always enabled and provides strictly stronger
     # buffer overflow detection, the practical impact is minimal.  Enabling
     # FORTIFY_SOURCE requires implementing the _chk variants in the stubs.
-    -D_FORTIFY_SOURCE=0
+    -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
     # section_keywords.h is overridden in fuzz/include/libkern/ to make
     # SECURITY_READ_ONLY_LATE variables writable (needed for zone init).
     -D__MACHO__=1
@@ -541,6 +541,8 @@ if(DEFINED ENV{SANITIZER})
                        third_party/xnu/san/kasan-memintrinsics.c
     )
     set(FUZZER_DEFINES -DKASAN=1)
+    set(FUZZER_CXX_FLAGS $ENV{CFLAGS})
+    set(FUZZER_LD_FLAGS $ENV{CFLAGS})
   endif()
 else()
   set(FUZZER_CXX_FLAGS -fsanitize=address,fuzzer-no-link -mllvm -asan-globals=0)

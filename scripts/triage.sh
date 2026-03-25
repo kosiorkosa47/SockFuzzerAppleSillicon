@@ -39,7 +39,11 @@ for f in $CRASH_FILES; do
   # Get top 5 stack frames as dedup key
   STACK=$(ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=1 \
     "$FUZZER" "$f" 2>&1 | grep "^    #[0-4]" | head -5 || true)
-  HASH=$(echo "$STACK" | md5sum | cut -c1-12)
+  if command -v md5sum >/dev/null 2>&1; then
+      HASH=$(echo "$STACK" | md5sum | cut -c1-12)
+    else
+      HASH=$(echo "$STACK" | md5 -q | cut -c1-12)
+    fi
 
   if [ -z "${SEEN_HASHES[$HASH]+x}" ]; then
     SEEN_HASHES[$HASH]="$f"
