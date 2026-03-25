@@ -257,7 +257,26 @@ message Command {
     Pipe pipe = 39;
     Shutdown shutdown = 40;
     PfControl pf_control = 41;
+    MptcpSocket mptcp_socket = 42;
+    MptcpSetsockopt mptcp_setsockopt = 43;
   }
+}
+
+// --- MPTCP (#47) ---
+
+message MptcpSocket {
+  required SoType so_type = 1;
+}
+
+message MptcpSetsockopt {
+  required FileDescriptor fd = 1;
+  required MptcpSvcType service_type = 2;
+}
+
+enum MptcpSvcType {
+  MPTCP_SVCTYPE_HANDOVER_E = 0;
+  MPTCP_SVCTYPE_INTERACTIVE_E = 1;
+  MPTCP_SVCTYPE_AGGREGATE_E = 2;
 }
 
 message AcceptNocancel {

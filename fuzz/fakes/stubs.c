@@ -369,15 +369,16 @@ STUB_ABORT(subyte)
 
 STUB_ABORT(suulong)
 
-STUB_ABORT(sysctl__debug_children)
-
-STUB_ABORT(sysctl__kern_children)
-
-STUB_ABORT(sysctl__net_children)
-
-STUB_ABORT(sysctl__net_link_generic_system_children)
-
-STUB_ABORT(sysctl__sysctl_children)
+// Sysctl node arrays — the real kernel populates these via linker sets.
+// We provide empty arrays so sysctl registration doesn't crash.
+// This allows net.inet.* and net.inet6.* sysctls registered by the
+// networking code to work without the full sysctl infrastructure.
+struct sysctl_oid_stub { int dummy; };
+struct sysctl_oid_stub sysctl__debug_children[1] = {};
+struct sysctl_oid_stub sysctl__kern_children[1] = {};
+struct sysctl_oid_stub sysctl__net_children[1] = {};
+struct sysctl_oid_stub sysctl__net_link_generic_system_children[1] = {};
+struct sysctl_oid_stub sysctl__sysctl_children[1] = {};
 
 STUB_ABORT(task_consume_32bit_log_flag)
 
@@ -720,7 +721,7 @@ STUB_ABORT(waitq_set_should_lazy_init_link)
 
 STUB_ABORT(workq_is_exiting)
 
-STUB_ABORT(sysctl_helper_waitq_set_nelem)
+int sysctl_helper_waitq_set_nelem() { return 0; }
 
 STUB_ABORT(turnstile_alloc)
 
@@ -792,7 +793,7 @@ STUB_ABORT(thread_update_servicer_override)
 
 STUB_ABORT(wakeup_one_with_inheritor)
 
-STUB_ABORT(sysctl__machdep_children)
+struct sysctl_oid_stub sysctl__machdep_children[1] = {};
 
 STUB_ABORT(thread_unfreeze_base_pri)
 

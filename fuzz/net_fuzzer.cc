@@ -1380,6 +1380,25 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         ioctl_wrapper(command.pf_control().fd(), cmd, nullptr, nullptr);
         break;
       }
+      case Command::kMptcpSocket: {
+        // AF_MULTIPATH = 39 in XNU
+        int fd = 0;
+        int err = socket_wrapper(39, command.mptcp_socket().so_type(), 0, &fd);
+        if (err == 0) {
+          assert(open_fds.find(fd) == open_fds.end());
+          open_fds.insert(fd);
+        }
+        break;
+      }
+      case Command::kMptcpSetsockopt: {
+        // SOL_SOCKET level, MPTCP_SERVICE_TYPE = 0x1090 + 0x121 = 531
+        int svc_type = command.mptcp_setsockopt().service_type();
+        setsockopt_wrapper(command.mptcp_setsockopt().fd(),
+                           0xffff,  // SOL_SOCKET
+                           531,     // MPTCP_SERVICE_TYPE
+                           (caddr_t)&svc_type, sizeof(svc_type), nullptr);
+        break;
+      }
       case Command::COMMAND_NOT_SET:
         break;
     }
