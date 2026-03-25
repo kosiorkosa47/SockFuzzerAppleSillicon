@@ -212,9 +212,28 @@ std::string get_sockaddr(const SockAddr &sockaddr) {
       struct sockaddr_un sun = {};
       sun.sun_len = sizeof(struct sockaddr_un);
       sun.sun_family = AF_UNIX;
-      size_t pathlen = std::min(sockaddr.sockaddr_un().sun_path().size(),
-                                (size_t)(SUN_PATH_LEN - 1));
-      memcpy(sun.sun_path, sockaddr.sockaddr_un().sun_path().data(), pathlen);
+      const SockAddrUn &un = sockaddr.sockaddr_un();
+      if (un.has_typed_path()) {
+        const char *path = "/tmp/fuzz.sock";
+        switch (un.typed_path()) {
+          case UNIX_PATH_EMPTY: path = ""; break;
+          case UNIX_PATH_TMP_SOCK: path = "/tmp/fuzz.sock"; break;
+          case UNIX_PATH_VAR_RUN: path = "/var/run/fuzz.sock"; break;
+          case UNIX_PATH_ABSTRACT: path = ""; sun.sun_path[0] = '\0';
+            memcpy(sun.sun_path + 1, "abstract", 8); break;
+          case UNIX_PATH_LONG: memset(sun.sun_path, 'A', SUN_PATH_LEN - 1); break;
+          case UNIX_PATH_DEVNULL: path = "/dev/null"; break;
+        }
+        if (un.typed_path() != UNIX_PATH_ABSTRACT &&
+            un.typed_path() != UNIX_PATH_LONG) {
+          size_t plen = strlen(path);
+          memcpy(sun.sun_path, path, std::min(plen, (size_t)(SUN_PATH_LEN - 1)));
+        }
+      } else if (un.has_custom_path()) {
+        size_t pathlen = std::min(un.custom_path().size(),
+                                  (size_t)(SUN_PATH_LEN - 1));
+        memcpy(sun.sun_path, un.custom_path().data(), pathlen);
+      }
       dat = std::string((char *)&sun, (char *)&sun + sizeof(sun));
       break;
     }

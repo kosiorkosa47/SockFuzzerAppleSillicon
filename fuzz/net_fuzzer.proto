@@ -93,7 +93,19 @@ message SockAddr {
 }
 
 message SockAddrUn {
-  required bytes sun_path = 1;
+  oneof path {
+    UnixPathType typed_path = 1;
+    bytes custom_path = 2;
+  }
+}
+
+enum UnixPathType {
+  UNIX_PATH_EMPTY = 0;
+  UNIX_PATH_TMP_SOCK = 1;      // /tmp/fuzz.sock
+  UNIX_PATH_VAR_RUN = 2;       // /var/run/fuzz.sock
+  UNIX_PATH_ABSTRACT = 3;      // abstract (starts with \0)
+  UNIX_PATH_LONG = 4;          // max length path
+  UNIX_PATH_DEVNULL = 5;       // /dev/null
 }
 
 message SockAddrGeneric {
