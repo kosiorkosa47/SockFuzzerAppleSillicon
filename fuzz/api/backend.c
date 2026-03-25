@@ -51,7 +51,7 @@ void tcp_fuzzer_reset(void);
 void in6_rtqtimo(void*);
 void frag6_timeout();
 void mld_timeout();
-bool ioctl_wrapper(unsigned long com);
+int ioctl_wrapper(int fd, unsigned long com, char* data, int* retval);
 void ip_input(mbuf_t m);
 void ip6_input(mbuf_t m);
 struct mbuf* mbuf_create(const uint8_t* data, size_t size, bool is_header,
@@ -125,6 +125,13 @@ __attribute__((visibility("default"))) void clear_all() {
 
   nstat_idle_check(NULL, NULL);
   domain_timeout(NULL);
+
+  // Reset PF state if it was enabled during this iteration.
+  // DIOCSTOP is idempotent — safe to call even if PF was never started.
+  {
+    extern const unsigned long diocstop_val;
+    ioctl_wrapper(0, diocstop_val, NULL, NULL);
+  }
 
   // Reset subsystem state for next iteration.
   kmem_mb_reset_pages();

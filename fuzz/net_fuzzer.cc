@@ -1082,6 +1082,22 @@ void HandleIoctlReal(const Command &command) {
                     (caddr_t)&ifreq, nullptr);
       break;
     }
+    case IoctlReal::kDiocaddrule:
+    case IoctlReal::kDiocchangerule: {
+      real_copyout = false;
+      unsigned long cmd = (command.ioctl_real().ioctl_case() == IoctlReal::kDiocaddrule)
+                              ? diocstart_val
+                              : diocstop_val;
+      ioctl_wrapper(command.ioctl_real().fd(), cmd, (caddr_t)1, nullptr);
+      real_copyout = true;
+      break;
+    }
+    case IoctlReal::kDiockillstates: {
+      real_copyout = false;
+      ioctl_wrapper(command.ioctl_real().fd(), diocstop_val, (caddr_t)1, nullptr);
+      real_copyout = true;
+      break;
+    }
     case IoctlReal::IOCTL_NOT_SET:
       break;
   }
@@ -1189,6 +1205,11 @@ void HandleSendmsg(const Command &command, int &retval) {
   }
   msg.msg_iov = (user64_addr_t)&iov;
   msg.msg_iovlen = 1;
+
+  if (sm.has_control() && !sm.control().empty()) {
+    msg.msg_control = (user64_addr_t)sm.control().data();
+    msg.msg_controllen = sm.control().size();
+  }
 
   sendmsg_wrapper(sm.s(), (caddr_t)&msg, sm.flags(), &retval);
 }
@@ -1448,6 +1469,19 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
                            SOL_SOCKET_XNU,
                            MPTCP_SERVICE_TYPE_OPT,
                            (caddr_t)&svc_type, sizeof(svc_type), nullptr);
+        break;
+      }
+      case Command::kSendtoNocancel: {
+        std::string sockaddr_s;
+        if (command.sendto_nocancel().has_to()) {
+          sockaddr_s = get_sockaddr(command.sendto_nocancel().to());
+        }
+        socklen_t size = sockaddr_s.size();
+        sendto_nocancel_wrapper(command.sendto_nocancel().s(),
+                       (caddr_t)command.sendto_nocancel().buf().data(),
+                       command.sendto_nocancel().buf().size(),
+                       command.sendto_nocancel().flags(),
+                       (caddr_t)sockaddr_s.data(), size, &retval);
         break;
       }
       case Command::COMMAND_NOT_SET:

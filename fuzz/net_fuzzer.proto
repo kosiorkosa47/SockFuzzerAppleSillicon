@@ -261,6 +261,7 @@ message Command {
     PfControl pf_control = 41;
     MptcpSocket mptcp_socket = 42;
     MptcpSetsockopt mptcp_setsockopt = 43;
+    SendtoNocancel sendto_nocancel = 44;
   }
 }
 
@@ -369,6 +370,7 @@ message Sendmsg {
   required bytes data = 2;
   required int32 flags = 3;
   optional SockAddr to = 4;
+  optional bytes control = 5;  // ancillary data (cmsg): SCM_RIGHTS, IP_PKTINFO, etc.
 }
 
 // message SendmsgNocancel {
@@ -391,7 +393,14 @@ message Sendto {
   optional SockAddr to = 4;
 }
 
-// message SendtoNocancel {
+message SendtoNocancel {
+  optional FileDescriptor s = 1;
+  optional bytes buf = 2;
+  optional int32 flags = 3;
+  optional SockAddr to = 4;
+}
+
+// message SendtoNocancel_old {
 //   optional int32 s = 1;
 //   optional bytes buf = 2;
 //   optional uint64 len = 3;
@@ -584,6 +593,27 @@ message IfReqVlan {
   required uint32 vlr_tag = 2;
 }
 
+message PfAddr {
+  optional SockAddr addr = 1;
+  optional uint32 port = 2;
+}
+
+message PfIoctlRule {
+  optional IfrName ifname = 1;
+  optional uint32 action = 2;    // PF_PASS=0, PF_DROP=1, PF_SCRUB=2
+  optional uint32 direction = 3; // PF_INOUT=0, PF_IN=1, PF_OUT=2
+  optional uint32 af = 4;        // AF_INET=2, AF_INET6=30
+  optional Protocol proto = 5;
+  optional PfAddr src = 6;
+  optional PfAddr dst = 7;
+}
+
+message PfIoctlKillStates {
+  optional PfAddr src = 1;
+  optional PfAddr dst = 2;
+  optional IfrName ifname = 3;
+}
+
 message IoctlReal {
   oneof ioctl {
     In6_AliasReq_64 siocaifaddr_in6_64 = 1;
@@ -596,6 +626,9 @@ message IoctlReal {
     IfReqAddr siocsifaddr = 9;
     IfReqRouterMode siocsetroutermode = 10;
     IfReqVlan siocsifvlan = 11;
+    PfIoctlRule diocaddrule = 12;
+    PfIoctlRule diocchangerule = 13;
+    PfIoctlKillStates diockillstates = 14;
   }
   optional FileDescriptor fd = 2;
 }
