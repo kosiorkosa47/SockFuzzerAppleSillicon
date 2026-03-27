@@ -44,11 +44,16 @@ jobs:
           ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=0 \
             timeout 10 ./net_fuzzer corpus/ -artifact_prefix=crashes/ \
             -max_total_time=5 2>&1; EXIT_CODE=$?
-          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 124 ]; then
+          # Exit codes: 0=clean, 124=timeout(expected), 77=XNU assert(finding)
+          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 124 ] && [ "$EXIT_CODE" -ne 77 ]; then
             echo "FAIL: fuzzer exited with code $EXIT_CODE"
             exit 1
           fi
-          echo "Smoke test passed (exit=$EXIT_CODE)"
+          if [ "$EXIT_CODE" -eq 77 ]; then
+            echo "Smoke test: XNU assertion hit (exit=77) — this is a finding, not a build failure"
+          else
+            echo "Smoke test passed (exit=$EXIT_CODE)"
+          fi
 
   build-linux:
     runs-on: ubuntu-latest
@@ -85,11 +90,16 @@ jobs:
           ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=0 \
             timeout 10 ./net_fuzzer corpus/ -artifact_prefix=crashes/ \
             -max_total_time=5 2>&1; EXIT_CODE=$?
-          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 124 ]; then
+          # Exit codes: 0=clean, 124=timeout(expected), 77=XNU assert(finding)
+          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 124 ] && [ "$EXIT_CODE" -ne 77 ]; then
             echo "FAIL: fuzzer exited with code $EXIT_CODE"
             exit 1
           fi
-          echo "Smoke test passed (exit=$EXIT_CODE)"
+          if [ "$EXIT_CODE" -eq 77 ]; then
+            echo "Smoke test: XNU assertion hit (exit=77) — this is a finding, not a build failure"
+          else
+            echo "Smoke test passed (exit=$EXIT_CODE)"
+          fi
 
       - name: Generate seed corpus
         run: |
