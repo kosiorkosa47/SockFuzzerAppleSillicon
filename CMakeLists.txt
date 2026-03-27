@@ -780,8 +780,8 @@ if(NOT DEFINED ENV{SANITIZER})
     fuzz/fakes/zalloc.c
     fuzz/fakes/thread.c
   )
-  target_include_directories(fakes_for_test PRIVATE ${BSD_INCLUDES})
-  target_compile_options(fakes_for_test PRIVATE ${XNU_C_FLAGS} ${BSD_DEFINES})
+  target_include_directories(fakes_for_test PRIVATE ${BSD_INCLUDES} ${OSFMK_INCLUDES})
+  target_compile_options(fakes_for_test PRIVATE ${XNU_C_FLAGS} ${BSD_DEFINES} ${OSFMK_DEFINES})
 
   # Build the C++ test binary linking against the fakes lib.
   add_executable(fake_impls_test fuzz/fakes/fake_impls_test.cc)
