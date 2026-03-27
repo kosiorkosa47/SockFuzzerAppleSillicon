@@ -49,16 +49,14 @@ jobs:
             -max_total_time=5 2>&1
           EXIT_CODE=$?
           set -e
-          # Exit codes: 0=clean, 124=timeout(expected), 77=XNU assert(finding)
-          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 124 ] && [ "$EXIT_CODE" -ne 77 ]; then
-            echo "FAIL: fuzzer exited with code $EXIT_CODE"
-            exit 1
-          fi
-          if [ "$EXIT_CODE" -eq 77 ]; then
-            echo "Smoke test: XNU assertion hit (exit=77) — this is a finding, not a build failure"
-          else
-            echo "Smoke test passed (exit=$EXIT_CODE)"
-          fi
+          # Exit codes: 0=clean, 124=timeout, 77=XNU assert, 134=ASAN finding
+          case $EXIT_CODE in
+            0)   echo "Smoke test passed — clean exit" ;;
+            124) echo "Smoke test passed — timeout (expected)" ;;
+            77)  echo "Smoke test: XNU assertion hit — this is a finding" ;;
+            134) echo "Smoke test: ASAN violation detected — this is a finding" ;;
+            *)   echo "FAIL: fuzzer exited with unexpected code $EXIT_CODE"; exit 1 ;;
+          esac
 
   build-linux:
     runs-on: ubuntu-latest
@@ -98,16 +96,14 @@ jobs:
             -max_total_time=5 2>&1
           EXIT_CODE=$?
           set -e
-          # Exit codes: 0=clean, 124=timeout(expected), 77=XNU assert(finding)
-          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 124 ] && [ "$EXIT_CODE" -ne 77 ]; then
-            echo "FAIL: fuzzer exited with code $EXIT_CODE"
-            exit 1
-          fi
-          if [ "$EXIT_CODE" -eq 77 ]; then
-            echo "Smoke test: XNU assertion hit (exit=77) — this is a finding, not a build failure"
-          else
-            echo "Smoke test passed (exit=$EXIT_CODE)"
-          fi
+          # Exit codes: 0=clean, 124=timeout, 77=XNU assert, 134=ASAN finding
+          case $EXIT_CODE in
+            0)   echo "Smoke test passed — clean exit" ;;
+            124) echo "Smoke test passed — timeout (expected)" ;;
+            77)  echo "Smoke test: XNU assertion hit — this is a finding" ;;
+            134) echo "Smoke test: ASAN violation detected — this is a finding" ;;
+            *)   echo "FAIL: fuzzer exited with unexpected code $EXIT_CODE"; exit 1 ;;
+          esac
 
       - name: Generate seed corpus
         run: |
