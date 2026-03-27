@@ -88,8 +88,8 @@ void* os_log_create() { return (void*)1; }
 
 void pflog_packet() {}
 
-// TODO(upstream): return a real vfs context
-void* vfs_context_current() { return NULL; }
+static char fake_vfs_context[256];
+void* vfs_context_current() { return fake_vfs_context; }
 
 int csproc_get_platform_binary(void* p) { return 0; }
 
@@ -110,7 +110,7 @@ void fake_uuid_reset(void) { g_uuid_counter = 0; }
 
 void uuid_generate_random(uuid_t out) {
   memset(out, 0, sizeof(uuid_t));
-  g_uuid_counter++;
+  if (++g_uuid_counter == 0) g_uuid_counter = 1;  // skip 0 (UUID_NULL)
   memcpy(out, &g_uuid_counter, sizeof(g_uuid_counter));
 }
 
@@ -431,7 +431,7 @@ void lck_rw_lock_exclusive() {}
 void timevaladd(struct timeval *t1, const struct timeval *t2) {
   t1->tv_sec += t2->tv_sec;
   t1->tv_usec += t2->tv_usec;
-  if (t1->tv_usec >= 1000000) {
+  while (t1->tv_usec >= 1000000) {
     t1->tv_sec++;
     t1->tv_usec -= 1000000;
   }
@@ -440,7 +440,7 @@ void timevaladd(struct timeval *t1, const struct timeval *t2) {
 void timevalsub(struct timeval *t1, const struct timeval *t2) {
   t1->tv_sec -= t2->tv_sec;
   t1->tv_usec -= t2->tv_usec;
-  if (t1->tv_usec < 0) {
+  while (t1->tv_usec < 0) {
     t1->tv_sec--;
     t1->tv_usec += 1000000;
   }

@@ -18,21 +18,21 @@ FROM debian:bookworm-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    clang-18 \
+    clang-16 \
     cmake \
     git \
-    lld-18 \
-    llvm-18 \
+    lld-16 \
+    llvm-16 \
     ninja-build \
     libprotobuf-dev \
     protobuf-compiler \
     ca-certificates \
   && rm -rf /var/lib/apt/lists/* \
-  && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100 \
-  && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100 \
-  && update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-18 100 \
-  && update-alternatives --install /usr/bin/llvm-profdata llvm-profdata /usr/bin/llvm-profdata-18 100 \
-  && update-alternatives --install /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-18 100
+  && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-16 100 \
+  && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-16 100 \
+  && update-alternatives --install /usr/bin/ld.lld ld.lld /usr/bin/ld.lld-16 100 \
+  && update-alternatives --install /usr/bin/llvm-profdata llvm-profdata /usr/bin/llvm-profdata-16 100 \
+  && update-alternatives --install /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-16 100
 
 WORKDIR /build/source
 COPY . .
@@ -47,10 +47,10 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libprotobuf32 \
     libstdc++6 \
-    llvm-18 \
+    llvm-16 \
   && rm -rf /var/lib/apt/lists/* \
-  && update-alternatives --install /usr/bin/llvm-profdata llvm-profdata /usr/bin/llvm-profdata-18 100 \
-  && update-alternatives --install /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-18 100
+  && update-alternatives --install /usr/bin/llvm-profdata llvm-profdata /usr/bin/llvm-profdata-16 100 \
+  && update-alternatives --install /usr/bin/llvm-cov llvm-cov /usr/bin/llvm-cov-16 100
 
 WORKDIR /work
 

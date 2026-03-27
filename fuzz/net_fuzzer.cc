@@ -31,7 +31,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <iostream>
 #include <memory>
 #include <vector>
 
@@ -65,7 +64,8 @@ void get_in6_addr(struct in6_addr *sai, enum In6Addr addr) {
       break;
     }
     case IN6_ADDR_LOOPBACK: {
-      *sai = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+      memset(sai, 0, sizeof(*sai));
+      sai->s6_addr[15] = 1;  // ::1
       assert(IN6_IS_ADDR_LOOPBACK(sai));
       break;
     }
@@ -304,7 +304,7 @@ std::string get_ip_hdr(const IpHdr &hdr, size_t expected_size) {
       .ip_hl = ihl,
       .ip_v = IPV4,
       .ip_tos = (u_char)hdr.ip_tos(),
-      .ip_len = (u_short)__builtin_bswap16(expected_size + options.size()),
+      .ip_len = (u_short)__builtin_bswap16(sizeof(ip_hdr) + options.size() + expected_size),
       .ip_id = (u_short)hdr.ip_id(),
       .ip_off = (u_short)hdr.ip_off(),
       .ip_ttl = (u_char)hdr.ip_ttl(),
@@ -653,11 +653,9 @@ void DoNecpClientAction(const NecpClientAction &necp_client_action) {
 }
 
 void DoTcpInput(const TcpPacket &tcp_packet) {
-  std::string ip_hdr_s = get_ip_hdr(tcp_packet.ip_hdr(), 0);  // size filled below
   std::string tcp_hdr_s = get_tcp_hdr(tcp_packet.tcp_hdr());
-  size_t total_size = ip_hdr_s.size() + tcp_hdr_s.size() + tcp_packet.data().size();
-  // Rewrite ip_len with correct total.
-  ip_hdr_s = get_ip_hdr(tcp_packet.ip_hdr(), total_size);
+  size_t payload_size = tcp_hdr_s.size() + tcp_packet.data().size();
+  std::string ip_hdr_s = get_ip_hdr(tcp_packet.ip_hdr(), payload_size);
   std::string packet_s = ip_hdr_s + tcp_hdr_s + tcp_packet.data();
 
   if (packet_s.empty()) {
@@ -693,8 +691,8 @@ void DoTcp6Input(const Tcp6Packet &tcp6_packet) {
 }
 
 void DoIp4Packet(const Ip4Packet &packet) {
-  size_t expected_size = sizeof(struct ip) + packet.data().size();
-  std::string packet_s = get_ip_hdr(packet.ip_hdr(), expected_size);
+  size_t payload_size = packet.data().size();
+  std::string packet_s = get_ip_hdr(packet.ip_hdr(), payload_size);
   packet_s += packet.data();
 
   void *mbuf_data = get_mbuf_data(packet_s.data(), packet_s.size(), PKTF_LOOP);
@@ -746,15 +744,14 @@ void DoIp6Packet(const Ip6Packet &packet) {
 
 void DoUdpInput(const UdpPacket &udp_packet) {
   struct udphdr udphdr = {
-      .uh_sport = (u_int16_t)udp_packet.udp_hdr().uh_sport(),
-      .uh_dport = (u_int16_t)udp_packet.udp_hdr().uh_dport(),
+      .uh_sport = __builtin_bswap16((u_int16_t)udp_packet.udp_hdr().uh_sport()),
+      .uh_dport = __builtin_bswap16((u_int16_t)udp_packet.udp_hdr().uh_dport()),
       .uh_ulen = __builtin_bswap16(sizeof(struct udphdr) +
                                     udp_packet.data().size()),
       .uh_sum = 0,
   };
-  size_t expected_size =
-      sizeof(struct ip) + sizeof(struct udphdr) + udp_packet.data().size();
-  std::string packet_s = get_ip_hdr(udp_packet.ip_hdr(), expected_size);
+  size_t payload_size = sizeof(struct udphdr) + udp_packet.data().size();
+  std::string packet_s = get_ip_hdr(udp_packet.ip_hdr(), payload_size);
   packet_s += std::string((char *)&udphdr, (char *)&udphdr + sizeof(udphdr));
   packet_s += udp_packet.data();
 
@@ -766,8 +763,8 @@ void DoUdpInput(const UdpPacket &udp_packet) {
 
 void DoUdp6Input(const Udp6Packet &udp6_packet) {
   struct udphdr udphdr = {
-      .uh_sport = (u_int16_t)udp6_packet.udp_hdr().uh_sport(),
-      .uh_dport = (u_int16_t)udp6_packet.udp_hdr().uh_dport(),
+      .uh_sport = __builtin_bswap16((u_int16_t)udp6_packet.udp_hdr().uh_sport()),
+      .uh_dport = __builtin_bswap16((u_int16_t)udp6_packet.udp_hdr().uh_dport()),
       .uh_ulen = __builtin_bswap16(sizeof(struct udphdr) +
                                     udp6_packet.data().size()),
       .uh_sum = 0,
@@ -791,9 +788,9 @@ void DoIcmp4Input(const Icmp4Packet &icmp4_packet) {
       .icmp_cksum = 0,
       .icmp_data = icmp4_packet.icmp_hdr().icmp_data(),
   };
-  size_t expected_size =
-      sizeof(struct ip) + sizeof(struct icmp_hdr) + icmp4_packet.data().size();
-  std::string packet_s = get_ip_hdr(icmp4_packet.ip_hdr(), expected_size);
+  size_t payload_size =
+      sizeof(struct icmp_hdr) + icmp4_packet.data().size();
+  std::string packet_s = get_ip_hdr(icmp4_packet.ip_hdr(), payload_size);
   packet_s += std::string((char *)&hdr, (char *)&hdr + sizeof(hdr));
   packet_s += icmp4_packet.data();
 
@@ -817,6 +814,8 @@ void DoIcmp6Input(const Icmp6Packet &icmp6_packet) {
 }
 
 void DoIpInput(const Packet &packet) {
+  // TODO: wire pkt.mbuf_layout() through to create_mbuf_for_packet()
+  // to enable mbuf chain fuzzing for injected packets.
   switch (packet.packet_case()) {
     case Packet::kTcpPacket: {
       DoTcpInput(packet.tcp_packet());

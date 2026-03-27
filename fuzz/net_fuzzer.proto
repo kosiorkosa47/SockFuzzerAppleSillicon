@@ -370,6 +370,8 @@ enum PfAction {
 message Recvfrom {
   optional FileDescriptor s = 1;
   optional bytes buf = 2;
+  // TODO: consider adding a MsgFlags enum for MSG_OOB(1), MSG_PEEK(2),
+  // MSG_DONTWAIT(0x80), MSG_WAITALL(0x40) to improve mutation effectiveness.
   optional int32 flags = 3;
   optional SockAddr from = 4;
 }
@@ -757,6 +759,8 @@ message Udp6Packet {
 }
 
 message IcmpHdr {
+  // These are uint8_t on the wire — values >255 are truncated.
+  // Using uint32 for proto compatibility.
   required uint32 icmp_type = 1;
   required uint32 icmp_code = 2;
   // icmp_cksum computed by kernel
@@ -959,6 +963,9 @@ enum IpVersion {
 
 // TODO(upstream): ip options
 message IpHdr {
+  // NOTE: ip_hl, ip_v, ip_len, and ip_sum are computed by get_ip_hdr()
+  // and override any values set here. They are kept as proto fields for
+  // potential future use (e.g., testing with malformed headers).
   required uint32 ip_hl = 1;
   required IpVersion ip_v = 2;
   required uint32 ip_tos = 3;

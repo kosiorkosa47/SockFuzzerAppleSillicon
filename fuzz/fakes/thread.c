@@ -33,8 +33,9 @@
 
 typedef void* thread_t;
 
-// Thread storage — must be declared before current_thread uses it.
-char fake_thread[4096];
+// Large enough for both struct thread and struct uthread which share this buffer.
+// Aligned to 16 bytes for pointer-sized fields.
+char fake_thread[8192] __attribute__((aligned(16)));
 
 thread_t current_thread() { return (thread_t)fake_thread; }
 

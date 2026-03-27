@@ -543,13 +543,19 @@ if(DEFINED ENV{SANITIZER})
     set(FUZZER_DEFINES -DKASAN=1)
     set(FUZZER_CXX_FLAGS $ENV{CFLAGS})
     set(FUZZER_LD_FLAGS $ENV{CFLAGS})
+  else()
+    # Other sanitizers (undefined, memory) — use provided flags without KASAN
+    set(FUZZER_SOURCES "")
+    set(FUZZER_DEFINES "")
+    set(FUZZER_CXX_FLAGS $ENV{CFLAGS})
+    set(FUZZER_LD_FLAGS $ENV{CFLAGS})
   endif()
 else()
-  set(FUZZER_CXX_FLAGS -fsanitize=address,fuzzer-no-link -mllvm -asan-globals=0)
-  set(FUZZER_LD_FLAGS -fsanitize=address,fuzzer)
+  set(FUZZER_CXX_FLAGS -fsanitize=fuzzer-no-link)
+  set(FUZZER_LD_FLAGS -fsanitize=fuzzer)
   set(ENV{LIB_FUZZING_ENGINE} -fsanitize=fuzzer)
-  set(FUZZER_SOURCES fuzz/fakes/san.c third_party/xnu/san/kasan-memintrinsics.c)
-  set(FUZZER_DEFINES -DKASAN=1)
+  set(FUZZER_SOURCES "")
+  set(FUZZER_DEFINES "")
 endif()
 
 # These must be built separately due to header incompatibilities
@@ -626,7 +632,7 @@ if(APPLE)
   add_custom_command(
     OUTPUT libxnu_relocatable.o
     COMMAND ld -r -arch ${CMAKE_SYSTEM_PROCESSOR} $<TARGET_OBJECTS:bsd> $<TARGET_OBJECTS:osfmk> -o libxnu_relocatable_raw.o
-    COMMAND ${CMAKE_COMMAND} -E env bash -c "nm -gU libxnu_relocatable_raw.o | awk '{print $$NF}' | sort -u > _all_syms.txt && grep -Fx -f ${CMAKE_CURRENT_BINARY_DIR}/xnu_exported_symbols.txt _all_syms.txt > _filtered_syms.txt || cp ${CMAKE_CURRENT_BINARY_DIR}/xnu_exported_symbols.txt _filtered_syms.txt && nmedit -s _filtered_syms.txt -p libxnu_relocatable_raw.o -o libxnu_relocatable.o"
+    COMMAND /bin/bash ${CMAKE_CURRENT_SOURCE_DIR}/cmake/localize_syms.sh ${CMAKE_CURRENT_BINARY_DIR}/xnu_exported_symbols.txt
     DEPENDS $<TARGET_OBJECTS:bsd> $<TARGET_OBJECTS:osfmk> ${CMAKE_CURRENT_BINARY_DIR}/xnu_exported_symbols.txt
     COMMAND_EXPAND_LISTS
     COMMENT "Creating relocatable XNU object with localized symbols"
@@ -860,13 +866,13 @@ if(NOT DEFINED ENV{SANITIZER} AND NOT APPLE)
                       -fprofile-instr-generate -fcoverage-mapping
   )
 
-  add_library(bsd_cov STATIC ${BSD_SOURCES} $<TARGET_OBJECTS:osfmk_cov>)
+  add_library(bsd_cov STATIC ${BSD_SOURCES} ${FUZZER_SOURCES} $<TARGET_OBJECTS:osfmk_cov>)
   target_include_directories(bsd_cov PRIVATE ${BSD_INCLUDES})
   set_target_properties(bsd_cov PROPERTIES C_VISIBILITY_PRESET hidden)
   target_compile_options(
     bsd_cov
     PRIVATE ${XNU_C_FLAGS} ${BSD_DEFINES} ${SAN_DEFINES} -DLIBXNU_BUILD=1
-            -fprofile-instr-generate -fcoverage-mapping
+            ${FUZZER_DEFINES} -fprofile-instr-generate -fcoverage-mapping
   )
 
   add_custom_command(

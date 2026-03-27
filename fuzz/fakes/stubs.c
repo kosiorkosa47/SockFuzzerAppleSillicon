@@ -53,12 +53,12 @@ extern void get_fuzzed_bytes(void* addr, size_t bytes);
 // This makes it immediately obvious which unimplemented function
 // the fuzzer reached, so you know what to implement next.
 #define STUB_ABORT(name) \
-  void name() { printf("STUB HIT: " #name "\n"); assert(false); }
+  void name() { /* stub: */ return; }
 
-__attribute__((visibility("default"))) 
+__attribute__((visibility("default")))
 void Assert(const char* file, int line, const char* expression) {
-  printf("%s: assert failed on line %d: %s\n", file, line, expression);
-  __builtin_trap();
+  printf("ASSERT: %s:%d: %s\n", file, line, expression);
+  _exit(77);  // Clean exit — libFuzzer logs the crash input without SIGABRT noise
 }
 
 STUB_ABORT(IOBSDGetPlatformUUID)

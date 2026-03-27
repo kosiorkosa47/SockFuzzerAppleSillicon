@@ -22,13 +22,25 @@
 #include <cstdlib>
 #include <cstring>
 
+// Stub implementations of fuzz data providers for test builds.
+// In the real fuzzer these live in net_fuzzer.cc and are fed by libFuzzer.
+// For unit tests we use deterministic values.
+static unsigned int test_fuzz_counter = 0;
+extern "C" {
+void get_fuzzed_bytes(void* addr, size_t bytes) {
+  memset(addr, (int)(test_fuzz_counter++ & 0xFF), bytes);
+}
+bool get_fuzzed_bool(void) { return (test_fuzz_counter++ & 1) != 0; }
+int get_fuzzed_int32(int low, int high) { return low; }
+unsigned int get_fuzzed_uint32(unsigned int low, unsigned int high) { return low; }
+unsigned int get_remaining_bytes(void) { return 4096; }
+}
+
 // Declarations for functions under test (defined in fake_impls.c / zalloc.c)
 extern "C" {
 extern bool real_copyout;
 int copyout(const void* kaddr, uint64_t udaddr, size_t len);
 int copyin(uint64_t uaddr, void* kaddr, size_t len);
-void get_fuzzed_bytes(void* addr, size_t bytes);
-bool get_fuzzed_bool(void);
 
 // zalloc
 struct zone;
