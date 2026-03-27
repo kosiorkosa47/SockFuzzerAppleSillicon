@@ -347,3 +347,9 @@ __attribute__((visibility("default"))) const unsigned long siocsetroutermode_val
     SIOCSETROUTERMODE;
 __attribute__((visibility("default"))) const unsigned long siocsifvlan_val =
     SIOCSIFVLAN;
+__attribute__((visibility("default"))) const unsigned long diocaddrule_val =
+    DIOCADDRULE;
+__attribute__((visibility("default"))) const unsigned long diocchangerule_val =
+    DIOCCHANGERULE;
+__attribute__((visibility("default"))) const unsigned long diockillstates_val =
+    DIOCKILLSTATES;

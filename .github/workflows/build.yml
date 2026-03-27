@@ -44,7 +44,7 @@ jobs:
           TIMEOUT_CMD="timeout"
           command -v gtimeout >/dev/null 2>&1 && TIMEOUT_CMD="gtimeout"
           set +e
-          ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=0 \
+          ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=1 \
             $TIMEOUT_CMD 10 ./net_fuzzer corpus/ -artifact_prefix=crashes/ \
             -max_total_time=5 2>&1
           EXIT_CODE=$?
@@ -93,7 +93,7 @@ jobs:
           cd build
           mkdir -p corpus crashes
           set +e
-          ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=0 \
+          ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=1 \
             timeout 10 ./net_fuzzer corpus/ -artifact_prefix=crashes/ \
             -max_total_time=5 2>&1
           EXIT_CODE=$?
@@ -113,7 +113,7 @@ jobs:
         run: |
           cd build
           mkdir -p seed_corpus
-          ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=0 \
+          ASAN_OPTIONS=detect_container_overflow=0:halt_on_error=1 \
             timeout 20 ./net_fuzzer seed_corpus -max_total_time=10 \
             -dict=../net_fuzzer.dict 2>&1 | tail -3
           echo "Seeds generated: $(find seed_corpus -type f | wc -l)"

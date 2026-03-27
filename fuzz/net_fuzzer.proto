@@ -385,19 +385,31 @@ enum PfAction {
   PF_STOP = 1;
 }
 
+enum MsgFlag {
+  MSG_FLAG_NONE = 0;
+  MSG_OOB = 1;
+  MSG_PEEK = 2;
+  MSG_DONTROUTE = 4;
+  MSG_EOR = 8;
+  MSG_TRUNC = 16;
+  MSG_CTRUNC = 32;
+  MSG_WAITALL = 64;
+  MSG_DONTWAIT = 128;
+  MSG_EOF = 256;
+  MSG_NOSIGNAL = 524288;
+}
+
 message Recvfrom {
   optional FileDescriptor s = 1;
   optional bytes buf = 2;
-  // TODO: consider adding a MsgFlags enum for MSG_OOB(1), MSG_PEEK(2),
-  // MSG_DONTWAIT(0x80), MSG_WAITALL(0x40) to improve mutation effectiveness.
-  optional int32 flags = 3;
+  repeated MsgFlag flags = 3;
   optional SockAddr from = 4;
 }
 
 message RecvfromNocancel {
   optional FileDescriptor s = 1;
   optional bytes buf = 2;
-  optional int32 flags = 3;
+  repeated MsgFlag flags = 3;
   optional SockAddr from = 4;
 }
 
@@ -425,7 +437,7 @@ message Recvmsg {
 message Sendmsg {
   required FileDescriptor s = 1;
   required bytes data = 2;
-  required int32 flags = 3;
+  repeated MsgFlag flags = 3;
   optional SockAddr to = 4;
   optional bytes control = 5;  // ancillary data (cmsg): SCM_RIGHTS, IP_PKTINFO, etc.
   repeated bytes extra_iovs = 6;  // additional scatter-gather segments
@@ -447,14 +459,14 @@ message Sendmsg {
 message Sendto {
   optional FileDescriptor s = 1;
   optional bytes buf = 2;
-  optional int32 flags = 3;
+  repeated MsgFlag flags = 3;
   optional SockAddr to = 4;
 }
 
 message SendtoNocancel {
   optional FileDescriptor s = 1;
   optional bytes buf = 2;
-  optional int32 flags = 3;
+  repeated MsgFlag flags = 3;
   optional SockAddr to = 4;
 }
 
@@ -776,11 +788,39 @@ message Udp6Packet {
   required bytes data = 3;
 }
 
+enum Icmp4Type {
+  ICMP_ECHOREPLY = 0;
+  ICMP_UNREACH = 3;
+  ICMP_SOURCEQUENCH = 4;
+  ICMP_REDIRECT = 5;
+  ICMP_ECHO = 8;
+  ICMP_ROUTERADVERT = 9;
+  ICMP_ROUTERSOLICIT = 10;
+  ICMP_TIMXCEED = 11;
+  ICMP_PARAMPROB = 12;
+  ICMP_TSTAMP = 13;
+  ICMP_TSTAMPREPLY = 14;
+  ICMP_IREQ = 15;
+  ICMP_IREQREPLY = 16;
+  ICMP_MASKREQ = 17;
+  ICMP_MASKREPLY = 18;
+}
+
+enum Icmp4Code {
+  ICMP_CODE_0 = 0;
+  ICMP_UNREACH_NET = 1;
+  ICMP_UNREACH_HOST = 2;
+  ICMP_UNREACH_PROTOCOL = 3;
+  ICMP_UNREACH_PORT = 4;
+  ICMP_UNREACH_NEEDFRAG = 5;
+  ICMP_UNREACH_SRCFAIL = 6;
+  ICMP_REDIRECT_NET = 7;
+  ICMP_REDIRECT_HOST = 8;
+}
+
 message IcmpHdr {
-  // These are uint8_t on the wire — values >255 are truncated.
-  // Using uint32 for proto compatibility.
-  required uint32 icmp_type = 1;
-  required uint32 icmp_code = 2;
+  required Icmp4Type icmp_type = 1;
+  required Icmp4Code icmp_code = 2;
   // icmp_cksum computed by kernel
   required uint32 icmp_data = 3;  // type-specific data (id+seq or gateway addr)
 }
@@ -996,6 +1036,9 @@ message IpHdr {
   required InAddr ip_dst = 10;
   // IP options (B10): LSRR, SSRR, record route, timestamp
   optional bytes ip_options = 11;
+  // When true, use proto ip_hl/ip_v/ip_len values verbatim instead of
+  // computing correct values. Enables fuzzing of malformed IP headers (#97).
+  optional bool malform_header = 12;
 }
 
 message Ip6Hdr {
@@ -1758,11 +1801,95 @@ message SockOptVal {
   }
 }
 
+// Per-level socket option enums (#95) — eliminates allow_alias mutation bias.
+// Each enum contains only options valid for that level.
+enum SolSocketOpt {
+  SO_OPT_REUSEADDR = 4;
+  SO_OPT_KEEPALIVE = 8;
+  SO_OPT_BROADCAST = 32;
+  SO_OPT_LINGER = 128;
+  SO_OPT_REUSEPORT = 512;
+  SO_OPT_NOSIGPIPE = 4130;
+  SO_OPT_SNDBUF = 4097;
+  SO_OPT_RCVBUF = 4098;
+  SO_OPT_SNDTIMEO = 4101;
+  SO_OPT_RCVTIMEO = 4102;
+  SO_OPT_TIMESTAMP = 1024;
+  SO_OPT_OOBINLINE = 256;
+  SO_OPT_DONTROUTE = 16;
+}
+
+enum TcpOpt {
+  TCP_OPT_NODELAY = 1;
+  TCP_OPT_MAXSEG = 2;
+  TCP_OPT_NOPUSH = 4;
+  TCP_OPT_KEEPALIVE = 16;
+  TCP_OPT_CONNECTIONTIMEOUT = 32;
+  TCP_OPT_KEEPINTVL = 257;
+  TCP_OPT_KEEPCNT = 258;
+  TCP_OPT_FASTOPEN = 261;
+  TCP_OPT_NOTSENT_LOWAT = 513;
+}
+
+enum IpOpt {
+  IP_OPT_TOS = 3;
+  IP_OPT_TTL = 4;
+  IP_OPT_MULTICAST_IF = 9;
+  IP_OPT_MULTICAST_TTL = 10;
+  IP_OPT_MULTICAST_LOOP = 11;
+  IP_OPT_ADD_MEMBERSHIP = 12;
+  IP_OPT_DROP_MEMBERSHIP = 13;
+  IP_OPT_BOUND_IF = 25;
+  IP_OPT_RECVDSTADDR = 7;
+}
+
+enum Ipv6Opt {
+  IPV6_OPT_UNICAST_HOPS = 4;
+  IPV6_OPT_MULTICAST_IF = 9;
+  IPV6_OPT_MULTICAST_HOPS = 10;
+  IPV6_OPT_MULTICAST_LOOP = 11;
+  IPV6_OPT_JOIN_GROUP = 12;
+  IPV6_OPT_LEAVE_GROUP = 13;
+  IPV6_OPT_V6ONLY = 27;
+  IPV6_OPT_BOUND_IF = 125;
+  IPV6_OPT_PKTINFO = 46;
+  IPV6_OPT_TCLASS = 36;
+}
+
+message SolSocketSetOpt {
+  required SolSocketOpt name = 1;
+  optional SockOptVal val = 2;
+}
+message TcpSetOpt {
+  required TcpOpt name = 1;
+  optional SockOptVal val = 2;
+}
+message IpSetOpt {
+  required IpOpt name = 1;
+  optional SockOptVal val = 2;
+}
+message Ipv6SetOpt {
+  required Ipv6Opt name = 1;
+  optional SockOptVal val = 2;
+}
+
 message SetSocketOpt {
+  optional FileDescriptor fd = 4;
+  oneof opt {
+    // Legacy: raw level + name (backward compatible with existing corpus)
+    SetSocketOptLegacy legacy = 5;
+    // Per-level: no allow_alias, no cross-level mismatches
+    SolSocketSetOpt sol_socket = 6;
+    TcpSetOpt tcp = 7;
+    IpSetOpt ip = 8;
+    Ipv6SetOpt ipv6 = 9;
+  }
+}
+
+message SetSocketOptLegacy {
   optional Protocol level = 1;
   optional SocketOptName name = 2;
   optional SockOptVal val = 3;
-  optional FileDescriptor fd = 4;
 }
 
 // Some pre-allocated file descriptors to make guessing

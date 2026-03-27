@@ -43,6 +43,9 @@ _siocprotodetach_val
 _siocsifaddr_val
 _diocstart_val
 _diocstop_val
+_diocaddrule_val
+_diocchangerule_val
+_diockillstates_val
 _siocsetroutermode_val
 _siocsifvlan_val
 _real_copyout

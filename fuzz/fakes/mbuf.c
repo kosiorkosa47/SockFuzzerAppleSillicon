@@ -161,22 +161,30 @@ void mcache_init() {
 void mcache_reap_now() { assert(false); }
 
 int mcache_alloc_ext(mcache_t* cp, void** list, unsigned int num, int wait) {
-  struct mbuf* m = (struct mbuf*)calloc(1, sizeof(struct mbuf));
-  m->m_hdr.mh_next = NULL;
-  m->m_hdr.mh_nextpkt = NULL;
-  m->m_type = MT_FREE;
-  m->m_flags = M_EXT;
-  m->m_ext.ext_buf = (caddr_t)calloc(1, num * cp->bufsize);
-  m->m_ext.ext_size = num * cp->bufsize;
-  m->m_hdr.mh_data = m->m_ext.ext_buf;
-  m->m_hdr.mh_len = num * cp->bufsize;
-  // Set up ext_refflags so m_free can properly clean up.
-  struct ext_ref* rfa = (struct ext_ref*)calloc(1, sizeof(struct ext_ref));
-  rfa->refcnt = 1;
-  rfa->minref = 1;
-  m->m_ext.ext_refflags = rfa;
-  *list = m;
-  return 1;
+  // Allocate num objects, chained via obj_next (first pointer in each buffer).
+  // This matches XNU's mcache_alloc_ext which returns a singly-linked list.
+  void* head = NULL;
+  unsigned int allocated = 0;
+  for (unsigned int i = 0; i < num; i++) {
+    struct mbuf* m = (struct mbuf*)calloc(1, sizeof(struct mbuf));
+    if (!m) break;
+    m->m_hdr.mh_next = (struct mbuf*)head;  // chain via mh_next
+    m->m_hdr.mh_nextpkt = NULL;
+    m->m_type = MT_FREE;
+    m->m_flags = M_EXT;
+    m->m_ext.ext_buf = (caddr_t)calloc(1, cp->bufsize);
+    m->m_ext.ext_size = cp->bufsize;
+    m->m_hdr.mh_data = m->m_ext.ext_buf;
+    m->m_hdr.mh_len = cp->bufsize;
+    struct ext_ref* rfa = (struct ext_ref*)calloc(1, sizeof(struct ext_ref));
+    rfa->refcnt = 1;
+    rfa->minref = 1;
+    m->m_ext.ext_refflags = rfa;
+    head = m;
+    allocated++;
+  }
+  *list = head;
+  return allocated;
 }
 
 void mcache_audit_cache() { assert(false); }

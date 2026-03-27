@@ -43,6 +43,14 @@ extern "C" {
 #include "types.h"
 }
 
+// Helper: combine repeated MsgFlag enum into bitmask.
+template <typename T>
+int combine_flags(const T &flags) {
+  int result = 0;
+  for (int f : flags) result |= f;
+  return result;
+}
+
 // TODO(upstream): support multiple addresses of each type below,
 // not just one of each type
 void get_in6_addr(struct in6_addr *sai, enum In6Addr addr) {
@@ -299,10 +307,11 @@ std::string get_ip_hdr(const IpHdr &hdr, size_t expected_size) {
 
   struct in_addr ip_src = {.s_addr = (unsigned int)hdr.ip_src()};
   struct in_addr ip_dst = {.s_addr = (unsigned int)hdr.ip_dst()};
-  uint8_t ihl = 5 + (options.size() / 4);
+  bool malform = hdr.has_malform_header() && hdr.malform_header();
+  uint8_t ihl = malform ? (uint8_t)hdr.ip_hl() : (uint8_t)(5 + (options.size() / 4));
   struct ip ip_hdr = {
       .ip_hl = ihl,
-      .ip_v = IPV4,
+      .ip_v = malform ? (u_int)hdr.ip_v() : IPV4,
       .ip_tos = (u_char)hdr.ip_tos(),
       .ip_len = (u_short)__builtin_bswap16(sizeof(ip_hdr) + options.size() + expected_size),
       .ip_id = (u_short)hdr.ip_id(),
@@ -531,6 +540,9 @@ extern const unsigned long diocstart_val;
 extern const unsigned long diocstop_val;
 extern const unsigned long siocsetroutermode_val;
 extern const unsigned long siocsifvlan_val;
+extern const unsigned long diocaddrule_val;
+extern const unsigned long diocchangerule_val;
+extern const unsigned long diockillstates_val;
 
 // Enable this when copyout should work.
 extern bool real_copyout;
@@ -891,14 +903,9 @@ void HandleSocket(const Command &command, std::set<int> &open_fds) {
   }
 }
 
-void HandleSetSockOpt(const Command &command) {
-  int s = command.set_sock_opt().fd();
-  int level = command.set_sock_opt().level();
-  int name = command.set_sock_opt().name();
-
+// Extract SockOptVal bytes from a proto val message.
+std::string BuildSockOptVal(const SockOptVal &sov) {
   std::string val_data;
-  if (command.set_sock_opt().has_val()) {
-    const SockOptVal &sov = command.set_sock_opt().val();
     switch (sov.val_case()) {
       case SockOptVal::kRaw:
         val_data = sov.raw();
@@ -954,6 +961,49 @@ void HandleSetSockOpt(const Command &command) {
       case SockOptVal::VAL_NOT_SET:
         break;
     }
+  return val_data;
+}
+
+void HandleSetSockOpt(const Command &command) {
+  int s = command.set_sock_opt().fd();
+  const SetSocketOpt &sopt = command.set_sock_opt();
+
+  int level = 0, name = 0;
+  std::string val_data;
+
+  switch (sopt.opt_case()) {
+    case SetSocketOpt::kLegacy:
+      level = sopt.legacy().level();
+      name = sopt.legacy().name();
+      if (sopt.legacy().has_val())
+        val_data = BuildSockOptVal(sopt.legacy().val());
+      break;
+    case SetSocketOpt::kSolSocket:
+      level = 0xffff;  // SOL_SOCKET
+      name = sopt.sol_socket().name();
+      if (sopt.sol_socket().has_val())
+        val_data = BuildSockOptVal(sopt.sol_socket().val());
+      break;
+    case SetSocketOpt::kTcp:
+      level = 6;  // IPPROTO_TCP
+      name = sopt.tcp().name();
+      if (sopt.tcp().has_val())
+        val_data = BuildSockOptVal(sopt.tcp().val());
+      break;
+    case SetSocketOpt::kIp:
+      level = 0;  // IPPROTO_IP
+      name = sopt.ip().name();
+      if (sopt.ip().has_val())
+        val_data = BuildSockOptVal(sopt.ip().val());
+      break;
+    case SetSocketOpt::kIpv6:
+      level = 41;  // IPPROTO_IPV6
+      name = sopt.ipv6().name();
+      if (sopt.ipv6().has_val())
+        val_data = BuildSockOptVal(sopt.ipv6().val());
+      break;
+    case SetSocketOpt::OPT_NOT_SET:
+      return;
   }
 
   setsockopt_wrapper(s, level, name, (caddr_t)val_data.data(),
@@ -1089,17 +1139,18 @@ void HandleIoctlReal(const Command &command) {
     }
     case IoctlReal::kDiocaddrule:
     case IoctlReal::kDiocchangerule: {
+      // PF rule add/change — pass fuzzed data through copyin (#93, #99).
       real_copyout = false;
       unsigned long cmd = (command.ioctl_real().ioctl_case() == IoctlReal::kDiocaddrule)
-                              ? diocstart_val
-                              : diocstop_val;
+                              ? diocaddrule_val
+                              : diocchangerule_val;
       ioctl_wrapper(command.ioctl_real().fd(), cmd, (caddr_t)1, nullptr);
       real_copyout = true;
       break;
     }
     case IoctlReal::kDiockillstates: {
       real_copyout = false;
-      ioctl_wrapper(command.ioctl_real().fd(), diocstop_val, (caddr_t)1, nullptr);
+      ioctl_wrapper(command.ioctl_real().fd(), diockillstates_val, (caddr_t)1, nullptr);
       real_copyout = true;
       break;
     }
@@ -1222,7 +1273,7 @@ void HandleSendmsg(const Command &command, int &retval) {
     msg.msg_controllen = sm.control().size();
   }
 
-  sendmsg_wrapper(sm.s(), (caddr_t)&msg, sm.flags(), &retval);
+  sendmsg_wrapper(sm.s(), (caddr_t)&msg, combine_flags(sm.flags()), &retval);
 }
 
 // ---------------------------------------------------------------------------
@@ -1402,7 +1453,7 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         std::unique_ptr<char[]> recvbuf(new char[bufsize]);
         recvfrom_wrapper(
             command.recvfrom().s(), (caddr_t)recvbuf.get(),
-            bufsize, command.recvfrom().flags(),
+            bufsize, combine_flags(command.recvfrom().flags()),
             (struct sockaddr *)sockaddr_s.data(), &size, &retval);
         break;
       }
@@ -1415,7 +1466,7 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         recvfrom_nocancel_wrapper(
             command.recvfrom_nocancel().s(),
             (caddr_t)recvbuf.get(), bufsize,
-            command.recvfrom_nocancel().flags(),
+            combine_flags(command.recvfrom_nocancel().flags()),
             (struct sockaddr *)sockaddr_s.data(), &size, &retval);
         break;
       }
@@ -1453,7 +1504,7 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         socklen_t size = sockaddr_s.size();
         sendto_wrapper(command.sendto().s(),
                        (caddr_t)command.sendto().buf().data(),
-                       command.sendto().buf().size(), command.sendto().flags(),
+                       command.sendto().buf().size(), combine_flags(command.sendto().flags()),
                        (caddr_t)sockaddr_s.data(), size, &retval);
         break;
       }
@@ -1505,7 +1556,7 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         sendto_nocancel_wrapper(command.sendto_nocancel().s(),
                        (caddr_t)command.sendto_nocancel().buf().data(),
                        command.sendto_nocancel().buf().size(),
-                       command.sendto_nocancel().flags(),
+                       combine_flags(command.sendto_nocancel().flags()),
                        (caddr_t)sockaddr_s.data(), size, &retval);
         break;
       }
