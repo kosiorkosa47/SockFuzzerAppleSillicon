@@ -264,7 +264,25 @@ message Command {
     SendtoNocancel sendto_nocancel = 44;
     Kqueue kqueue = 45;
     TcpSession tcp_session = 46;
+    // Novel subsystems beyond P0 scope (#89)
+    ContentFilterAttach cfil_attach = 47;
+    FlowDivertConnect flow_divert_connect = 48;
   }
+}
+
+// --- Content Filter (#89) ---
+// Kernel content inspection framework (Screen Time, MDM, parental controls)
+message ContentFilterAttach {
+  required FileDescriptor fd = 1;
+  optional uint32 filter_id = 2;
+}
+
+// --- Flow Divert (#89) ---
+// Per-app VPN redirect at kernel level
+message FlowDivertConnect {
+  required FileDescriptor fd = 1;
+  optional SockAddr target = 2;
+  optional uint32 flow_id = 3;
 }
 
 // --- kqueue (B4) ---

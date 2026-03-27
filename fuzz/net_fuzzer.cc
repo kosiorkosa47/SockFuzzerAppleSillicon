@@ -1579,6 +1579,30 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         }
         break;
       }
+      case Command::kCfilAttach: {
+        // Content filter attach (#89) — attach content filter to socket.
+        // Uses SO_CFIL_SOCK_ID socket option (4368) to interact with cfil.
+        int cfil_id = command.cfil_attach().filter_id();
+        setsockopt_wrapper(command.cfil_attach().fd(),
+                           0xffff,  // SOL_SOCKET
+                           4368,    // SO_CFIL_SOCK_ID
+                           (caddr_t)&cfil_id, sizeof(cfil_id), nullptr);
+        break;
+      }
+      case Command::kFlowDivertConnect: {
+        // Flow divert (#89) — set SO_FLOW_DIVERT_TOKEN then connect.
+        int token = command.flow_divert_connect().flow_id();
+        setsockopt_wrapper(command.flow_divert_connect().fd(),
+                           0xffff,  // SOL_SOCKET
+                           4358,    // SO_FLOW_DIVERT_TOKEN
+                           (caddr_t)&token, sizeof(token), nullptr);
+        if (command.flow_divert_connect().has_target()) {
+          std::string addr_s = get_sockaddr(command.flow_divert_connect().target());
+          connect_wrapper(command.flow_divert_connect().fd(),
+                          (caddr_t)addr_s.data(), addr_s.size(), nullptr);
+        }
+        break;
+      }
       case Command::COMMAND_NOT_SET:
         break;
     }
