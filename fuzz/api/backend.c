@@ -240,6 +240,15 @@ __attribute__((visibility("default"))) bool initialize_network() {
   net_init_run();
   int res = necp_init();
   assert(!res);
+
+  // Content filter (#183): set gate variables so cfil_sock_attach proceeds.
+  // cfil_init() can't be called directly — it requires kctl infrastructure.
+  // Setting cfil_active_count > 0 bypasses the "no active filters" gate.
+  {
+    extern uint32_t cfil_active_count;
+    cfil_active_count = 1;
+  }
+
   return true;
 }
 

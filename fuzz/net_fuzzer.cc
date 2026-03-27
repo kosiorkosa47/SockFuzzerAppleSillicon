@@ -1044,9 +1044,35 @@ void HandleSetSockOpt(const Command &command) {
 
 void HandleGetSockOpt(const Command &command) {
   int s = command.get_sock_opt().fd();
-  int level = command.get_sock_opt().level();
-  int name = command.get_sock_opt().name();
-  socklen_t size = command.get_sock_opt().size();
+  const GetSocketOpt &gopt = command.get_sock_opt();
+
+  int level = 0, name = 0;
+  switch (gopt.opt_case()) {
+    case GetSocketOpt::kLegacy:
+      level = gopt.legacy().level();
+      name = gopt.legacy().name();
+      break;
+    case GetSocketOpt::kSolSocket:
+      level = XNU_SOL_SOCKET;
+      name = gopt.sol_socket().name();
+      break;
+    case GetSocketOpt::kTcp:
+      level = XNU_IPPROTO_TCP;
+      name = gopt.tcp().name();
+      break;
+    case GetSocketOpt::kIp:
+      level = XNU_IPPROTO_IP;
+      name = gopt.ip().name();
+      break;
+    case GetSocketOpt::kIpv6:
+      level = XNU_IPPROTO_IPV6;
+      name = gopt.ipv6().name();
+      break;
+    case GetSocketOpt::OPT_NOT_SET:
+      return;
+  }
+
+  socklen_t size = gopt.size();
   if (size > 4096) {
     return;
   }

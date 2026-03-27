@@ -173,7 +173,10 @@ int mcache_alloc_ext(mcache_t* cp, void** list, unsigned int num, int wait) {
     m->m_type = MT_FREE;
     m->m_flags = M_EXT;
     void *aligned_buf;
-    posix_memalign(&aligned_buf, 256, cp->bufsize);  // MSIZE=256
+    if (posix_memalign(&aligned_buf, 256, cp->bufsize) != 0) {  // MSIZE=256
+      free(m);
+      break;
+    }
     memset(aligned_buf, 0, cp->bufsize);
     m->m_ext.ext_buf = (caddr_t)aligned_buf;
     m->m_ext.ext_size = cp->bufsize;
@@ -206,15 +209,20 @@ unsigned int mcache_cache_line_size() {
 
 void mcache_dump_mca() {}
 
-void mcache_free_ext(mcache_t *cp, void **list, unsigned int num, int purged) {
-  // Free each mbuf in the linked list.
-  for (unsigned int i = 0; i < num && *list != NULL; i++) {
-    struct mbuf *m = (struct mbuf *)*list;
-    void *next = m->m_hdr.mh_next;
-    if (m->m_ext.ext_buf) free(m->m_ext.ext_buf);
-    if (m->m_ext.ext_refflags) free(m->m_ext.ext_refflags);
-    free(m);
-    *list = next;
+// mcache_obj_t is the first field of any mcache-allocated buffer.
+// In XNU: typedef struct mcache_obj { struct mcache_obj *obj_next; } mcache_obj_t;
+typedef struct mcache_obj { struct mcache_obj *obj_next; } mcache_obj_t;
+
+void mcache_free_ext(mcache_t *cp, mcache_obj_t *list) {
+  while (list) {
+    mcache_obj_t *next = list->obj_next;
+    struct mbuf *m = (struct mbuf *)list;
+    if (m->m_flags & M_EXT) {
+      if (m->m_ext.ext_buf) free(m->m_ext.ext_buf);
+      if (m->m_ext.ext_refflags) free(m->m_ext.ext_refflags);
+    }
+    free(list);
+    list = next;
   }
 }
 

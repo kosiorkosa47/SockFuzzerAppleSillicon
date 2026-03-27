@@ -845,15 +845,14 @@ enum Icmp4Type {
 }
 
 enum Icmp4Code {
-  ICMP_CODE_0 = 0;
-  ICMP_UNREACH_NET = 1;
-  ICMP_UNREACH_HOST = 2;
-  ICMP_UNREACH_PROTOCOL = 3;
-  ICMP_UNREACH_PORT = 4;
-  ICMP_UNREACH_NEEDFRAG = 5;
-  ICMP_UNREACH_SRCFAIL = 6;
-  ICMP_REDIRECT_NET = 7;
-  ICMP_REDIRECT_HOST = 8;
+  option allow_alias = true;
+  ICMP_CODE_ZERO = 0;
+  ICMP_UNREACH_NET_C = 0;
+  ICMP_UNREACH_HOST_C = 1;
+  ICMP_UNREACH_PROTOCOL_C = 2;
+  ICMP_UNREACH_PORT_C = 3;
+  ICMP_UNREACH_NEEDFRAG_C = 4;
+  ICMP_UNREACH_SRCFAIL_C = 5;
 }
 
 message IcmpHdr {
@@ -1959,11 +1958,25 @@ enum FileDescriptor {
   FD_9 = 9;
 }
 
-message GetSocketOpt {
+message GetSocketOptLegacy {
   optional Protocol level = 1;
   optional SocketOptName name = 2;
-  optional int32 size = 3;
-  optional uint32 fd = 4;
+}
+message SolSocketGetOpt { required SolSocketOpt name = 1; }
+message TcpGetOpt { required TcpOpt name = 1; }
+message IpGetOpt { required IpOpt name = 1; }
+message Ipv6GetOpt { required Ipv6Opt name = 1; }
+
+message GetSocketOpt {
+  optional FileDescriptor fd = 4;
+  optional int32 size = 5;
+  oneof opt {
+    GetSocketOptLegacy legacy = 6;
+    SolSocketGetOpt sol_socket = 7;
+    TcpGetOpt tcp = 8;
+    IpGetOpt ip = 9;
+    Ipv6GetOpt ipv6 = 10;
+  }
 }
 
 message Socket {
