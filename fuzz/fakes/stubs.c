@@ -47,6 +47,7 @@
 
 int printf(const char* format, ...);
 int vprintf(const char* format, va_list ap);
+void free(void *ptr);
 extern void get_fuzzed_bytes(void* addr, size_t bytes);
 
 // Convenience macro — logs which stub was hit before aborting.
@@ -232,7 +233,7 @@ void lck_rw_destroy() {}
 
 void lck_rw_lock_exclusive_to_shared() {}
 
-void lck_rw_lock_shared_to_exclusive() {}
+int lck_rw_lock_shared_to_exclusive() { return 1; }
 
 void lck_rw_sleep() {}
 
@@ -572,7 +573,7 @@ void zfill() {}
 
 STUB_ABORT(kernel_pmap)
 
-void kmem_free() {}
+void kmem_free(void *map, void *addr, unsigned long size) { free(addr); }
 
 void cru2x() {}
 
@@ -828,7 +829,7 @@ void task_exc_guard_default() {}
 
 void sysctl_task_set_no_smt() {}
 
-void current_uthread() {}
+void* current_uthread() { extern char fake_uthread[]; return fake_uthread; }
 
 void filt_wldetach_sync_ipc() {}
 
@@ -878,7 +879,10 @@ void wakeup_all_with_inheritor() {}
 
 void registerSleepWakeInterest() {}
 
-void absolutetime_to_microtime() {}
+void absolutetime_to_microtime(uint64_t abstime, uint32_t *secs, uint32_t *microsecs) {
+  *secs = (uint32_t)(abstime / 1000000000ULL);
+  *microsecs = (uint32_t)((abstime / 1000ULL) % 1000000ULL);
+}
 
 void thread_abort() {}
 const char *strnstr(const char *s, const char *find, size_t slen) {

@@ -1369,6 +1369,7 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         socklen_t size = sockaddr_s.size();
         accept_wrapper(command.accept().fd(), (caddr_t)sockaddr_s.data(),
                        &size, &retval);
+        if (retval >= 0) { open_fds.insert(retval); }
         break;
       }
       case Command::kIpInput:
@@ -1451,6 +1452,7 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         socklen_t size = sockaddr_s.size();
         accept_nocancel_wrapper(command.accept_nocancel().s(),
                                 (caddr_t)sockaddr_s.data(), &size, &retval);
+        if (retval >= 0) { open_fds.insert(retval); }
         break;
       }
       case Command::kConnectNocancel: {

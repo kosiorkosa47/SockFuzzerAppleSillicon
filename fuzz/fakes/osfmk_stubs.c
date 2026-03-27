@@ -196,7 +196,7 @@ void stackshot_init() {}
 void task_threadmax() {}
 void version() {}
 void mach_init_activity_id() {}
-void current_processor() {}
+void* current_processor() { return (void*)1; }
 void telemetry_init() {}
 void vm_pageout() {}
 void sdt_early_init() {}
@@ -208,7 +208,7 @@ struct machine_info machine_info;
 uint64_t max_mem_actual = 4000000;
 
 void thread_bind() {}
-void spinlock_timeout_panic() {}
+void spinlock_timeout_panic() { printf("SPINLOCK TIMEOUT\n"); }
 void sched_dualq_dispatch() {}
 void processor_state_update_explicit() {}
 void mapping_free_prime() {}
