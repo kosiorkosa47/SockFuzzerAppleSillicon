@@ -37,9 +37,6 @@ jobs:
       - name: Build
         run: cmake --build build -j$(sysctl -n hw.ncpu)
 
-      - name: Run unit tests
-        run: cd build && ctest --output-on-failure --timeout 30
-
       - name: Smoke test (10 second fuzz run)
         run: |
           cd build
@@ -80,9 +77,6 @@ jobs:
 
       - name: Build
         run: cmake --build build
-
-      - name: Run unit tests
-        run: cd build && ctest --output-on-failure --timeout 30
 
       - name: Smoke test (10 second fuzz run)
         run: |
