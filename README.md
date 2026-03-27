@@ -78,11 +78,15 @@ ninja
 ### Docker
 
 ```bash
-docker build --pull -t sockfuzzer-builder .
-docker run -t -i -v $PWD:/source sockfuzzer-builder /bin/bash
-# Inside the container:
-cd /source && mkdir -p build && cd build
-CC=clang CXX=clang++ cmake -GNinja .. && ninja
+# Build the multi-stage image (builds fuzzer inside, ~5 min)
+docker build -t sockfuzzer .
+
+# Run the fuzzer (starts immediately)
+docker run --rm -v $PWD/corpus:/work/corpus -v $PWD/crashes:/work/crashes \
+  sockfuzzer
+
+# Interactive shell (for debugging)
+docker run --rm -it --entrypoint /bin/bash sockfuzzer
 ```
 
 ## Running the Fuzzer

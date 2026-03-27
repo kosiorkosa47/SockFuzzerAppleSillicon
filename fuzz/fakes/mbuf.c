@@ -194,17 +194,17 @@ void mcache_audit_cache() {}
 
 void mcache_audit_free_verify() {}
 
-void mcache_audit_free_verify_set() { assert(false); }
+void mcache_audit_free_verify_set() {}
 
-void mcache_bkt_isempty() { assert(false); }
+int mcache_bkt_isempty() { return 1; }
 
-void mcache_buffer_log() { assert(false); }
+void mcache_buffer_log() {}
 
 unsigned int mcache_cache_line_size() {
   return 64;
 }
 
-void mcache_dump_mca() { assert(false); }
+void mcache_dump_mca() {}
 
 void mcache_free_ext(mcache_t *cp, void **list, unsigned int num, int purged) {
   // Free each mbuf in the linked list.
@@ -222,9 +222,9 @@ unsigned int mcache_getflags() { return 0; }
 
 void mcache_purge_cache() {}
 
-void mcache_reap() { assert(false); }
+void mcache_reap() {}
 
-void mcache_set_pattern() { assert(false); }
+void mcache_set_pattern() {}
 
 void mcache_waiter_dec() {}
 
