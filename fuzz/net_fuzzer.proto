@@ -298,8 +298,8 @@ enum KevFilter {
   EVFILT_PROC_K = -5;
   EVFILT_SIGNAL_K = -6;
   EVFILT_TIMER_K = -7;
+  EVFILT_SOCK_K = -13;
   EVFILT_EXCEPT_K = -15;
-  EVFILT_SOCK_K = -14;
 }
 
 enum KevAction {
@@ -315,6 +315,9 @@ message KevChange {
   required FileDescriptor ident = 1;
   required KevFilter filter = 2;
   repeated KevAction flags = 3;
+  optional uint32 fflags = 4;   // filter-specific flags (NOTE_LOWAT, NOTE_CONNRESET, etc.)
+  optional int64 data = 5;      // filter-specific data
+  optional uint64 udata = 6;    // opaque user data
 }
 
 message Kevent {

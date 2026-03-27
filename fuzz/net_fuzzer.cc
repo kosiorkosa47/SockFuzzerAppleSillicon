@@ -1723,6 +1723,9 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
           int flags = 0;
           for (int f : kev.changes(i).flags()) flags |= f;
           changelist[i].flags = (uint16_t)flags;
+          changelist[i].fflags = kev.changes(i).fflags();
+          changelist[i].data = kev.changes(i).data();
+          changelist[i].udata = kev.changes(i).udata();
         }
         // Allocate event buffer
         int nevents = kev.nevents() % 8;

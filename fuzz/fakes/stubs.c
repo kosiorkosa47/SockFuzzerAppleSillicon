@@ -132,7 +132,7 @@ void clock_get_calendar_nanotime(void *secs, void *nanosecs) {
 
 void coalition_get_leader() {}
 
-void coalition_is_leader() {}
+int coalition_is_leader() { return 0; }
 
 void copyin_word() {}
 
@@ -158,7 +158,7 @@ int deflate(void *strm, int flush) { return 1; /* Z_STREAM_END */ }
 
 int deflateReset(void *strm) { return 0; }
 
-void enodev() {}
+int enodev() { return -1; }
 
 void enodev_strat() {}
 
@@ -222,7 +222,7 @@ void kdp_set_ip_and_mac_addresses() {}
 
 void kernel_debug_filtered() {}
 
-void kernel_task() {}
+void* kernel_task = (void*)1;
 
 void launchd_exit_reason_get_string_desc() {}
 
@@ -250,7 +250,7 @@ void mac_error_select() {}
 
 void mac_policy_list() {}
 
-void mac_policy_list_conditional_busy() {}
+int mac_policy_list_conditional_busy() { return 0; }
 
 void mac_policy_list_unbusy() {}
 
@@ -258,9 +258,9 @@ void mac_proc_check_ledger() {}
 
 void mac_proc_check_signal() {}
 
-void mac_socket_check_received() {}
+int mac_socket_check_received() { return 0; }
 
-void mac_socket_check_stat() {}
+int mac_socket_check_stat() { return 0; }
 
 void mac_system_enforce() {}
 
@@ -268,9 +268,9 @@ void mach_absolutetime_asleep() {}
 
 void machport_filtops() {}
 
-void max_mem() {}
+uint64_t max_mem = 4ULL * 1024 * 1024 * 1024;
 
-void mb_map() {}
+void* mb_map = NULL;
 
 void memorystatus_filtops() {}
 
@@ -302,7 +302,7 @@ void pgfind() {}
 
 void pgrp_iterate() {}
 
-void port_name_to_thread() {}
+void* port_name_to_thread() { return NULL; }
 
 void proc_get_effective_task_policy() {}
 
@@ -332,7 +332,7 @@ void proc_parentholdref() {}
 
 void proc_pgrp() {}
 
-void proc_self() {}
+void* proc_self() { extern void* kernproc; return kernproc; }
 
 void proc_set_thread_policy() {}
 
@@ -348,7 +348,7 @@ void proc_uuid_policy_kernel() {}
 
 void proc_uuid_policy_lookup() {}
 
-void pthread_functions() {}
+void* pthread_functions = NULL;
 
 void pthread_priority_canonicalize() {}
 
@@ -356,11 +356,11 @@ void ptmx_kqops() {}
 
 void ptsd_kqops() {}
 
-void pzfind() {}
+void* pzfind() { return NULL; }
 
-void sane_size() {}
+uint64_t sane_size = 4ULL * 1024 * 1024 * 1024;
 
-void securelevel() {}
+int securelevel = -1;
 
 void semaphore_timedwait_signal_trap_internal() {}
 
@@ -399,7 +399,7 @@ void task_did_exec() {}
 
 void task_hold() {}
 
-void task_is_active() {}
+int task_is_active() { return 1; }
 
 void task_is_exec_copy() {}
 
@@ -475,7 +475,7 @@ void thread_should_halt() {}
 
 void thread_starts_owning_workloop() {}
 
-void thread_tid() {}
+uint64_t thread_tid() { return 1; }
 
 void thread_update_ipc_override() {}
 
@@ -506,9 +506,9 @@ void untimeout() {}
 
 void vaddlog() {}
 
-void vfs_context_create() {}
+void* vfs_context_create() { return (void*)1; }
 
-void vfs_context_rele() {}
+int vfs_context_rele() { return 0; }
 
 STUB_ABORT(vm_kernel_slid_base)
 
@@ -586,7 +586,7 @@ void namei() {}
 
 void nameidone() {}
 
-void vfs_context_ucred() {}
+void* vfs_context_ucred() { return NULL; }
 
 void vn_create() {}
 
@@ -603,7 +603,7 @@ void audit_arg_socket() {}
 
 void audit_arg_value32() {}
 
-void vfs_context_cwd() {}
+void* vfs_context_cwd() { return NULL; }
 
 void vnode_isreg() {}
 
@@ -714,7 +714,7 @@ void thread_wakeup_prim() {}
 
 void waitq_wakeup64_thread() {}
 
-void turnstile_prepare() {}
+void* turnstile_prepare() { return (void*)1; }
 
 int assert_wait_deadline() { return 0; }
 
@@ -748,7 +748,7 @@ void workq_is_exiting() {}
 
 int sysctl_helper_waitq_set_nelem() { return 0; }
 
-void turnstile_alloc() {}
+void* turnstile_alloc() { return (void*)1; }
 
 void workq_kern_threadreq_update_inheritor() {}
 
@@ -925,7 +925,7 @@ const char *sysctl_debug_get_preoslog(size_t *size) {
 
 void task_get_filter_msg_flag() {}
 void task_set_filter_msg_flag() {}
-void thread_zone() {}
+void* thread_zone = NULL;
 
 /*
  * zone_require -- in the real kernel, asserts that a pointer was allocated
