@@ -62,13 +62,13 @@ void Assert(const char* file, int line, const char* expression) {
   _exit(77);  // Clean exit — libFuzzer logs the crash input without SIGABRT noise
 }
 
-void IOBSDGetPlatformUUID() {}
+int IOBSDGetPlatformUUID() { return 0; }
 
-void IOMapperInsertPage() {}
+unsigned int IOMapperInsertPage() { return 0; }
 
-void IOPMCopySleepWakeUUIDKey() {}
+int IOPMCopySleepWakeUUIDKey() { return 0; }
 
-void IOTaskHasEntitlement() {}
+int IOTaskHasEntitlement() { return 1; }
 
 void OSMalloc_Tagalloc() {}
 
@@ -135,7 +135,7 @@ void coalition_get_leader() {}
 
 int coalition_is_leader() { return 0; }
 
-void copyin_word() {}
+int copyin_word() { return 0; }
 
 int copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done) {
   if (len == 0) { if (done) *done = 0; return 0; }
@@ -161,7 +161,7 @@ int deflateReset(void *strm) { return 0; }
 
 int enodev() { return -1; }
 
-void enodev_strat() {}
+int enodev_strat() { return -1; }
 
 void exit_with_reason() {}
 
@@ -169,7 +169,7 @@ void fs_filtops() {}
 
 void fsevent_filtops() {}
 
-void fuulong() {}
+int fuulong() { return 0; }
 
 void gPEClockFrequencyInfo() {}
 
@@ -263,7 +263,7 @@ int mac_socket_check_received() { return 0; }
 
 int mac_socket_check_stat() { return 0; }
 
-void mac_system_enforce() {}
+unsigned int mac_system_enforce = 0;
 
 void mach_absolutetime_asleep() {}
 
@@ -305,11 +305,11 @@ void pgrp_iterate() {}
 
 void* port_name_to_thread() { return NULL; }
 
-void proc_get_effective_task_policy() {}
+int proc_get_effective_task_policy() { return 0; }
 
-void proc_getcdhash() {}
+int proc_getcdhash() { return 0; }
 
-void proc_iterate() {}
+int proc_iterate() { return 0; }
 
 void proc_klist_lock() {}
 
@@ -323,7 +323,7 @@ void proc_list_unlock() {}
 
 void proc_lock() {}
 
-void proc_log_32bit_telemetry() {}
+int proc_log_32bit_telemetry() { return 0; }
 
 void proc_name_address() {}
 
@@ -392,7 +392,7 @@ struct sysctl_oid_stub sysctl__net_children[1] = {};
 struct sysctl_oid_stub sysctl__net_link_generic_system_children[1] = {};
 struct sysctl_oid_stub sysctl__sysctl_children[1] = {};
 
-void task_consume_32bit_log_flag() {}
+int task_consume_32bit_log_flag() { return 0; }
 
 void task_deallocate() {}
 
@@ -430,11 +430,11 @@ int thread_block() { return 0; }
 
 int thread_block_parameter() { return 0; }
 
-void thread_call_cancel() {}
+int thread_call_cancel() { return 0; }
 
-void thread_call_cancel_wait() {}
+int thread_call_cancel_wait() { return 0; }
 
-void thread_call_enter() {}
+int thread_call_enter() { return 0; }
 
 void thread_call_free() {}
 
@@ -442,7 +442,7 @@ void thread_call_func_cancel() {}
 
 void thread_call_func_delayed() {}
 
-void thread_call_isactive() {}
+int thread_call_isactive() { return 0; }
 
 void thread_drop_ipc_override() {}
 
@@ -521,29 +521,29 @@ void vn_stat() {}
 
 void vnode_filtops() {}
 
-void vnode_isfifo() {}
+int vnode_isfifo() { return 0; }
 
-void waitq_assert_wait64() {}
+int waitq_assert_wait64() { return 0; }
 
-void waitq_assert_wait64_leeway() {}
+int waitq_assert_wait64_leeway() { return 0; }
 
 void waitq_clear_prepost() {}
 
 void waitq_deinit() {}
 
-void waitq_get_prepost_id() {}
+uint64_t waitq_get_prepost_id() { return 0; }
 
-void waitq_init() {}
+int waitq_init() { return 0; }
 
-void waitq_is_valid() {}
+int waitq_is_valid() { return 1; }
 
-void waitq_link() {}
+int waitq_link() { return 0; }
 
 void waitq_link_release() {}
 
-void waitq_link_reserve() {}
+int waitq_link_reserve() { return 0; }
 
-void waitq_set_alloc() {}
+void* waitq_set_alloc() { return (void*)1; }
 
 void waitq_set_clear_preposts() {}
 
@@ -551,7 +551,7 @@ void waitq_set_deinit() {}
 
 void waitq_set_init() {}
 
-void waitq_set_is_valid() {}
+int waitq_set_is_valid() { return 1; }
 
 void waitq_set_unlink_all() {}
 
@@ -559,11 +559,11 @@ void waitq_unlink() {}
 
 void waitq_unlink_by_prepost_id() {}
 
-void waitq_wakeup64_all() {}
+int waitq_wakeup64_all() { return 0; }
 
-void waitq_wakeup64_one() {}
+int waitq_wakeup64_one() { return 0; }
 
-void wqset_id() {}
+uint64_t wqset_id() { return 0; }
 
 void wqset_waitq() {}
 
@@ -606,9 +606,9 @@ void audit_arg_value32() {}
 
 void* vfs_context_cwd() { return NULL; }
 
-void vnode_isreg() {}
+int vnode_isreg() { return 0; }
 
-void vnode_size() {}
+int vnode_size() { return 0; }
 
 int aes_decrypt_aad_gcm() { return 0; }
 
@@ -644,7 +644,7 @@ int aes_encrypt_key_with_iv_gcm() { return 0; }
 
 int aes_encrypt_reset_gcm() { return 0; }
 
-void thread_call_enter1_delayed() {}
+int thread_call_enter1_delayed() { return 0; }
 
 void panic(const char *fmt, ...) {
   printf("KERNEL PANIC: ");
@@ -691,9 +691,9 @@ uint32_t net_flowhash(const void *key, uint32_t len, const uint32_t seed) {
   return net_flowhash_mh3_x86_32(key, len, seed);
 }
 
-void os_cpu_in_cksum() {}
+uint32_t os_cpu_in_cksum() { return 0; }
 
-void os_cpu_in_cksum_mbuf() {}
+uint32_t os_cpu_in_cksum_mbuf() { return 0; }
 
 void proc_name() {}
 
@@ -713,7 +713,7 @@ void turnstile_cleanup() {}
 
 void thread_wakeup_prim() {}
 
-void waitq_wakeup64_thread() {}
+int waitq_wakeup64_thread() { return 0; }
 
 void* turnstile_prepare() { return (void*)1; }
 
@@ -745,7 +745,7 @@ void nat464_translate_64() {}
 
 void waitq_set_should_lazy_init_link() {}
 
-void workq_is_exiting() {}
+int workq_is_exiting() { return 0; }
 
 int sysctl_helper_waitq_set_nelem() { return 0; }
 
@@ -841,7 +841,7 @@ int cfil_crypto_sign_data() { return 0; }
 
 void thread_set_no_smt() {}
 
-void net_mpklog_enabled() {}
+int net_mpklog_enabled = 1;
 
 int cfil_crypto_init_client() { return 0; }
 
@@ -855,7 +855,7 @@ void atm_get_diagnostic_config() {}
 
 void cfil_crypto_cleanup_state() {}
 
-void copyin_atomic64() {}
+int copyin_atomic64() { return 0; }
 
 void thread_drop_kevent_override() {}
 
@@ -869,7 +869,7 @@ STUB_ABORT(_vm_kernel_addrhash_XNU_INTERNAL)
 
 void thread_add_servicer_override() {}
 
-void net_mpklog_type() {}
+uint8_t net_mpklog_type = 0;
 
 void mach_bridge_remote_time() {}
 
@@ -910,7 +910,7 @@ uint32_t crc32(uint32_t crc, const void *buf, size_t size) {
 
 void cs_get_cdhash() {}
 void cs_hash_type() {}
-void cs_valid() {}
+int cs_valid() { return 1; }
 void mac_file_notify_close() {}
 void mach_bridge_timer_enable() {}
 void machine_thread_function_pointers_convert_from_user() {}

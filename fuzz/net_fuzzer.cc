@@ -328,7 +328,7 @@ std::string get_ip_hdr(const IpHdr &hdr, size_t expected_size) {
       .ip_tos = (u_char)hdr.ip_tos(),
       .ip_len = (u_short)__builtin_bswap16(sizeof(ip_hdr) + options.size() + expected_size),
       .ip_id = (u_short)hdr.ip_id(),
-      .ip_off = (u_short)hdr.ip_off(),
+      .ip_off = __builtin_bswap16((u_short)hdr.ip_off()),
       .ip_ttl = (u_char)hdr.ip_ttl(),
       .ip_p = (u_char)hdr.ip_p(),
       .ip_sum = 0,
@@ -457,7 +457,7 @@ std::string get_ip6_frag_hdr(const Ip6FragHdr &hdr) {
   struct ip6_frag ip6_frag = {
       .ip6f_nxt = (uint8_t)hdr.ip6f_nxt(),
       .ip6f_reserved = (uint8_t)hdr.ip6f_reserved(),
-      .ip6f_offlg = (uint16_t)hdr.ip6f_offlg(),
+      .ip6f_offlg = __builtin_bswap16((uint16_t)hdr.ip6f_offlg()),
       .ip6f_ident = hdr.ip6f_ident(),
   };
 
@@ -1077,7 +1077,7 @@ void HandleIoctlReal(const Command &command) {
       get_sockaddr6(&alias.ifra_dstaddr, req.ifra_dstaddr());
       get_sockaddr6(&alias.ifra_prefixmask, req.ifra_prefixmask());
       for (int flag : req.ifra_flags()) {
-        alias.ifra_flags ^= flag;
+        alias.ifra_flags |= flag;
       }
       get_in6_addrlifetime_64(&alias.ifra_lifetime, req.ifra_lifetime());
       ioctl_wrapper(command.ioctl_real().fd(), siocaifaddr_in6_64,
@@ -1396,6 +1396,8 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         break;
       case Command::kClearAll:
         clear_all();
+        open_fds.clear();
+        cids.clear();
         break;
       case Command::kNecpMatchPolicy: {
         std::unique_ptr<uint8_t[]> params(
@@ -1480,6 +1482,9 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
       case Command::kPeeloff:
         peeloff_wrapper(command.peeloff().s(), command.peeloff().aid(),
                         &retval);
+        if (retval >= 0) {
+          open_fds.insert(retval);
+        }
         break;
       case Command::kRecvfrom: {
         std::string sockaddr_s = get_sockaddr(command.recvfrom().from());

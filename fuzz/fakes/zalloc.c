@@ -153,6 +153,7 @@ unsigned int pmap_find_phys(int pmap, uintptr_t va) { return (unsigned int)((va 
 
 void* __MALLOC_ZONE(size_t size, int type, int flags,
                     vm_allocation_site_t* site) {
+  if (flags & 1) return calloc(1, size);  // M_ZERO = 0x0001
   return malloc(size);
 }
 

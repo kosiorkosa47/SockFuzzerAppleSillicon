@@ -396,7 +396,10 @@ void ovbcopy(const char* from, char* to, size_t nbytes) {
 
 int __attribute__((warn_unused_result))
 copyin(const user_addr_t uaddr, void *kaddr, size_t len) {
-  if (!kaddr || len == 0) {
+  if (!kaddr) {
+    return EFAULT_XNU;
+  }
+  if (len == 0) {
     return 0;
   }
   // USERADDR_FUZZED means "generate fuzzed bytes"; any other non-null
