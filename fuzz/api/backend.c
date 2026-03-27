@@ -104,6 +104,7 @@ extern void kmem_mb_reset_pages(void);
 extern void fake_time_reset(void);
 extern void fake_uuid_reset(void);
 extern char fake_thread[];
+extern char fake_uthread[];
 
 __attribute__((visibility("default"))) void clear_all() {
   // Run kernel timers to drain pending work.
@@ -146,7 +147,8 @@ __attribute__((visibility("default"))) void clear_all() {
   kmem_mb_reset_pages();
   fake_time_reset();
   fake_uuid_reset();
-  memset(fake_thread, 0, 4096);
+  memset(fake_thread, 0, 8192);
+  memset(fake_uthread, 0, 4096);
 }
 
 #define MT_DATA 1

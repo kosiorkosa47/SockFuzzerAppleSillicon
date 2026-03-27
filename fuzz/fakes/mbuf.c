@@ -158,7 +158,7 @@ void mcache_init() {
   // Nothing to do for mocked case.
 }
 
-void mcache_reap_now() { assert(false); }
+void mcache_reap_now() {}
 
 int mcache_alloc_ext(mcache_t* cp, void** list, unsigned int num, int wait) {
   // Allocate num objects, chained via obj_next (first pointer in each buffer).
@@ -172,7 +172,10 @@ int mcache_alloc_ext(mcache_t* cp, void** list, unsigned int num, int wait) {
     m->m_hdr.mh_nextpkt = NULL;
     m->m_type = MT_FREE;
     m->m_flags = M_EXT;
-    m->m_ext.ext_buf = (caddr_t)calloc(1, cp->bufsize);
+    void *aligned_buf;
+    posix_memalign(&aligned_buf, 256, cp->bufsize);  // MSIZE=256
+    memset(aligned_buf, 0, cp->bufsize);
+    m->m_ext.ext_buf = (caddr_t)aligned_buf;
     m->m_ext.ext_size = cp->bufsize;
     m->m_hdr.mh_data = m->m_ext.ext_buf;
     m->m_hdr.mh_len = cp->bufsize;
@@ -187,9 +190,9 @@ int mcache_alloc_ext(mcache_t* cp, void** list, unsigned int num, int wait) {
   return allocated;
 }
 
-void mcache_audit_cache() { assert(false); }
+void mcache_audit_cache() {}
 
-void mcache_audit_free_verify() { assert(false); }
+void mcache_audit_free_verify() {}
 
 void mcache_audit_free_verify_set() { assert(false); }
 
@@ -203,16 +206,26 @@ unsigned int mcache_cache_line_size() {
 
 void mcache_dump_mca() { assert(false); }
 
-void mcache_free_ext() { assert(false); }
+void mcache_free_ext(mcache_t *cp, void **list, unsigned int num, int purged) {
+  // Free each mbuf in the linked list.
+  for (unsigned int i = 0; i < num && *list != NULL; i++) {
+    struct mbuf *m = (struct mbuf *)*list;
+    void *next = m->m_hdr.mh_next;
+    if (m->m_ext.ext_buf) free(m->m_ext.ext_buf);
+    if (m->m_ext.ext_refflags) free(m->m_ext.ext_refflags);
+    free(m);
+    *list = next;
+  }
+}
 
 unsigned int mcache_getflags() { return 0; }
 
-void mcache_purge_cache() { assert(false); }
+void mcache_purge_cache() {}
 
 void mcache_reap() { assert(false); }
 
 void mcache_set_pattern() { assert(false); }
 
-void mcache_waiter_dec() { assert(false); }
+void mcache_waiter_dec() {}
 
-void mcache_waiter_inc() { assert(false); }
+void mcache_waiter_inc() {}

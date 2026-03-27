@@ -36,6 +36,7 @@ typedef void* thread_t;
 // Large enough for both struct thread and struct uthread which share this buffer.
 // Aligned to 16 bytes for pointer-sized fields.
 char fake_thread[8192] __attribute__((aligned(16)));
+char fake_uthread[4096] __attribute__((aligned(16)));
 
 thread_t current_thread() { return (thread_t)fake_thread; }
 
@@ -44,7 +45,7 @@ kern_return_t thread_policy_set() {
 }
 
 // let caller read/write to fake thread
-void* get_bsdthread_info(thread_t thread) { return fake_thread; }
+void* get_bsdthread_info(thread_t thread) { return fake_uthread; }
 
 // callbacks
 void* thread_call_allocate() { return (void*)1; }

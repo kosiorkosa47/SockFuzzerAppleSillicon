@@ -53,7 +53,7 @@ extern void get_fuzzed_bytes(void* addr, size_t bytes);
 // This makes it immediately obvious which unimplemented function
 // the fuzzer reached, so you know what to implement next.
 #define STUB_ABORT(name) \
-  void name() { /* stub: */ return; }
+  void name() { printf("STUB HIT: " #name "\n"); __builtin_trap(); }
 
 __attribute__((visibility("default")))
 void Assert(const char* file, int line, const char* expression) {
@@ -116,13 +116,24 @@ STUB_ABORT(check_actforsig)
 
 STUB_ABORT(clear_thread_rwlock_boost)
 
-STUB_ABORT(clock_absolutetime_interval_to_deadline)
+void clock_absolutetime_interval_to_deadline(uint64_t interval, uint64_t *deadline) {
+  extern uint64_t g_fake_time_counter;
+  *deadline = g_fake_time_counter + interval;
+}
 
-STUB_ABORT(clock_continuoustime_interval_to_deadline)
+void clock_continuoustime_interval_to_deadline(uint64_t interval, uint64_t *deadline) {
+  extern uint64_t g_fake_time_counter;
+  *deadline = g_fake_time_counter + interval;
+}
 
 STUB_ABORT(clock_deadline_for_periodic_event)
 
-STUB_ABORT(clock_get_calendar_nanotime)
+void clock_get_calendar_nanotime(void *secs, void *nanosecs) {
+  extern uint64_t g_fake_time_counter;
+  g_fake_time_counter += 100000;
+  *(uint32_t *)secs = (uint32_t)(g_fake_time_counter / 1000000000ULL);
+  *(uint32_t *)nanosecs = (uint32_t)(g_fake_time_counter % 1000000000ULL);
+}
 
 
 STUB_ABORT(coalition_get_leader)
@@ -295,7 +306,13 @@ void nanoseconds_to_absolutetime(uint64_t nanoseconds, uint64_t *result) {
   *result = nanoseconds;
 }
 
-STUB_ABORT(nanotime)
+void nanotime(void *ts) {
+  extern uint64_t g_fake_time_counter;
+  g_fake_time_counter += 100000;
+  long *f = (long *)ts;
+  f[0] = (long)(g_fake_time_counter / 1000000000ULL);
+  f[1] = (long)(g_fake_time_counter % 1000000000ULL);
+}
 
 STUB_ABORT(pg_rele)
 

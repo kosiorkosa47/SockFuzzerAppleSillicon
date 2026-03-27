@@ -149,7 +149,7 @@ void kmem_mb_reset_pages(void) {
 }
 
 // TODO: actually simulate physical page mappings
-unsigned int pmap_find_phys(int pmap, uintptr_t va) { return 0; }
+unsigned int pmap_find_phys(int pmap, uintptr_t va) { return (unsigned int)((va >> 12) + 1); }
 
 void* __MALLOC_ZONE(size_t size, int type, int flags,
                     vm_allocation_site_t* site) {

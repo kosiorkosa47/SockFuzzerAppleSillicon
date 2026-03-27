@@ -30,6 +30,7 @@
 // subsystems should live in their own file.
 
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -49,6 +50,7 @@ extern void get_fuzzed_bytes(void* addr, size_t bytes);
 extern bool get_fuzzed_bool(void);
 
 int snprintf(char*, size_t, const char*, ...) __printflike(3, 4);
+int vsnprintf(char*, size_t, const char*, va_list);
 
 int maxfilesperproc = 10;
 
@@ -141,7 +143,7 @@ void* vfs_context_proc() { return kernproc; }
 // paths (retransmission, keepalive, route expiry) are actually exercised.
 // Reset to 0 is implicit: the counter persists across iterations which
 // mimics monotonic system time.
-static uint64_t g_fake_time_counter = 1000000;  // start at 1ms in nanoseconds
+uint64_t g_fake_time_counter = 1000000;  // start at 1ms in nanoseconds
 
 __attribute__((visibility("default")))
 void fake_time_reset(void) { g_fake_time_counter = 1000000; }
@@ -370,7 +372,10 @@ void* current_proc() { return kernproc; }
 
 int proc_selfpid() { return 1; }
 
-void tvtohz() {}
+int tvtohz(void *tvp) {
+  long *tv = (long *)tvp;
+  return (int)(tv[0] * 100 + tv[1] / 10000);
+}
 
 int kauth_cred_getuid() {
   // UUID: root
@@ -501,7 +506,10 @@ int mac_socket_check_connect() { return 0; }
 
 void ml_thread_policy() {}
 
-int aes_encrypt_key128() { return -1; }
+int aes_encrypt_key128(const unsigned char *key, void *ctx) {
+  memcpy(ctx, key, 16);
+  return 0;
+}
 
 void OSBacktrace() {}
 
@@ -636,7 +644,13 @@ int fls(unsigned int mask) {
 }
 
 int scnprintf(char *buf, size_t size, const char *fmt, ...) {
-  return 0;
+  if (size == 0) return 0;
+  va_list ap;
+  va_start(ap, fmt);
+  int ret = vsnprintf(buf, size, fmt, ap);
+  va_end(ap);
+  if (ret < 0) return 0;
+  return (ret >= (int)size) ? (int)(size - 1) : ret;
 }
 
 rlim_t

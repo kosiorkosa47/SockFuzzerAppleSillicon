@@ -186,7 +186,7 @@ void get_in6_addr(struct in6_addr *sai, enum In6Addr addr) {
 void get_sockaddr6(struct sockaddr_in6 *sai, const SockAddr6 &sa6) {
   sai->sin6_len = sizeof(struct sockaddr_in6);
   sai->sin6_family = (sa_family_t)AF_INET6;  // sa6.family();
-  sai->sin6_port = (in_port_t)sa6.port();
+  sai->sin6_port = __builtin_bswap16((in_port_t)sa6.port());
   sai->sin6_flowinfo = sa6.flow_info();
   get_in6_addr(&sai->sin6_addr, sa6.sin6_addr());
   sai->sin6_scope_id = sa6.sin6_scope_id();
@@ -212,7 +212,7 @@ std::string get_sockaddr(const SockAddr &sockaddr) {
           .sin_len = sizeof(struct sockaddr_in),
           .sin_family =
               AF_INET,  // (unsigned char)sockaddr.sockaddr4().sin_family(),
-          .sin_port = (unsigned short)sockaddr.sockaddr4().sin_port(),
+          .sin_port = __builtin_bswap16((unsigned short)sockaddr.sockaddr4().sin_port()),
           .sin_addr = {(unsigned int)sockaddr.sockaddr4().sin_addr()},
           .sin_zero = {},
       };
@@ -347,9 +347,9 @@ std::string get_tcp_hdr(const TcpHdr &hdr) {
       .th_ack = __builtin_bswap32(hdr.th_ack()),
       .th_off = hdr.th_off(),
       .th_flags = 0,
-      .th_win = (unsigned short)hdr.th_win(),
+      .th_win = __builtin_bswap16((unsigned short)hdr.th_win()),
       .th_sum = 0,
-      .th_urp = (unsigned short)hdr.th_urp(),
+      .th_urp = __builtin_bswap16((unsigned short)hdr.th_urp()),
   };
 
   for (const int flag : hdr.th_flags()) {
@@ -1133,6 +1133,7 @@ void HandleIoctlReal(const Command &command) {
       struct ifreq ifreq = {};
       get_ifr_name(ifreq.ifr_name,
                    command.ioctl_real().siocsifvlan().ifr_name());
+      ifreq.ifr_ifru.ifru_intval = command.ioctl_real().siocsifvlan().vlr_tag();
       ioctl_wrapper(command.ioctl_real().fd(), siocsifvlan_val,
                     (caddr_t)&ifreq, nullptr);
       break;
@@ -1581,25 +1582,32 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
         open_fds.insert(fd);
 
         // Bind to a port.
-        struct sockaddr_in sin = {};
-        sin.sin_len = sizeof(sin);
-        sin.sin_family = 2;  // AF_INET
-        sin.sin_port = (unsigned short)command.tcp_session().port();
-        sin.sin_addr.s_addr = 0;  // INADDR_ANY
-        bind_wrapper(fd, (caddr_t)&sin, sizeof(sin), nullptr);
+        if (domain == 30) {  // AF_INET6
+          struct sockaddr_in6 sin6 = {};
+          sin6.sin6_len = sizeof(sin6);
+          sin6.sin6_family = 30;
+          sin6.sin6_port = __builtin_bswap16((unsigned short)command.tcp_session().port());
+          bind_wrapper(fd, (caddr_t)&sin6, sizeof(sin6), nullptr);
+        } else {
+          struct sockaddr_in sin = {};
+          sin.sin_len = sizeof(sin);
+          sin.sin_family = 2;
+          sin.sin_port = __builtin_bswap16((unsigned short)command.tcp_session().port());
+          sin.sin_addr.s_addr = 0;
+          bind_wrapper(fd, (caddr_t)&sin, sizeof(sin), nullptr);
+        }
 
         int st = command.tcp_session().session_type();
         if (st >= TCP_LISTEN) {
           listen_wrapper(fd, 5, nullptr);
         }
-        if (st >= TCP_SYN_RCVD && command.tcp_session().has_extra_packet()) {
+        if (st == TCP_SYN_RCVD && command.tcp_session().has_extra_packet()) {
+          // Inject SYN to move to SYN_RCVD
           DoIpInput(command.tcp_session().extra_packet());
         }
-        if (st >= TCP_ESTABLISHED) {
-          // Inject a SYN+ACK to complete handshake (best effort).
-          if (command.tcp_session().has_extra_packet()) {
-            DoIpInput(command.tcp_session().extra_packet());
-          }
+        if (st >= TCP_ESTABLISHED && command.tcp_session().has_extra_packet()) {
+          // Inject packet to advance to ESTABLISHED or beyond
+          DoIpInput(command.tcp_session().extra_packet());
         }
         if (st == TCP_CLOSE_WAIT || st == TCP_FIN_WAIT_1 ||
             st == TCP_FIN_WAIT_2 || st == TCP_TIME_WAIT ||
@@ -1608,13 +1616,8 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
           if (command.tcp_session().has_extra_packet()) {
             DoIpInput(command.tcp_session().extra_packet());
           }
-          if (st == TCP_FIN_WAIT_1 || st == TCP_LAST_ACK) {
-            close_wrapper(fd, nullptr);
-            open_fds.erase(fd);
-          }
         }
-        // Apply optional socket option in this state.
-        // Build a synthetic Command wrapping the extra_sockopt for HandleSetSockOpt.
+        // Apply optional socket option BEFORE close (#115).
         if (command.tcp_session().has_extra_sockopt()) {
           const SetSocketOpt &sopt = command.tcp_session().extra_sockopt();
           int level = 0, name = 0;
@@ -1639,6 +1642,11 @@ DEFINE_BINARY_PROTO_FUZZER(const Session &session) {
             setsockopt_wrapper(fd, level, name, (caddr_t)val_data.data(),
                                val_data.size(), nullptr);
           }
+        }
+        // Close AFTER sockopt for FIN_WAIT/LAST_ACK states.
+        if (st == TCP_FIN_WAIT_1 || st == TCP_LAST_ACK) {
+          close_wrapper(fd, nullptr);
+          open_fds.erase(fd);
         }
         break;
       }
