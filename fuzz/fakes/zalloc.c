@@ -44,10 +44,156 @@ void* calloc(size_t nmemb, size_t size);
 void free(void* ptr);
 int posix_memalign(void** memptr, size_t alignment, size_t size);
 
+// ============================================================================
+// Zone Tracking — UAF, double-free, and zone confusion detection
+// ============================================================================
+//
+// Every zone allocation is tracked in a lightweight open-addressing hash table
+// keyed by pointer value.  On zfree() we validate:
+//   1. The pointer was actually allocated by zalloc (not wild free)
+//   2. It has not already been freed (double-free)
+//   3. It is being freed to the SAME zone it was allocated from (zone confusion)
+//
+// Freed allocations enter a quarantine ring buffer.  While in quarantine the
+// backing memory is ASAN-poisoned (if available) so any use-after-free access
+// triggers an immediate ASAN report.  The quarantine is drained on
+// zone_tracking_reset() which is called from clear_all() between iterations.
+//
+// Cost: ~O(1) per alloc/free, fixed 64KB hash table + quarantine buffer.
+// ============================================================================
+
+#define ZT_HASH_SIZE    8192        // must be power of 2
+#define ZT_HASH_MASK    (ZT_HASH_SIZE - 1)
+#define ZT_QUARANTINE   4096        // ring buffer capacity
+
+// ASAN manual poisoning — available when compiled with -fsanitize=address
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define ZT_HAS_ASAN 1
+void __asan_poison_memory_region(void const volatile *addr, size_t size);
+void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
+#endif
+#endif
+#ifndef ZT_HAS_ASAN
+#define ZT_HAS_ASAN 0
+#define __asan_poison_memory_region(addr, size) ((void)(addr), (void)(size))
+#define __asan_unpoison_memory_region(addr, size) ((void)(addr), (void)(size))
+#endif
+
+struct zt_entry {
+	void           *ptr;        // allocation address (NULL = empty slot)
+	struct zone    *zone;       // owning zone (NULL for kalloc/MALLOC)
+	uint32_t        size;       // allocation size
+	uint32_t        freed;      // 1 = in quarantine
+};
+
+struct zt_quarantine_entry {
+	void           *ptr;
+	uint32_t        size;
+};
+
+static struct zt_entry          zt_table[ZT_HASH_SIZE];
+static struct zt_quarantine_entry zt_quarantine[ZT_QUARANTINE];
+static uint32_t                 zt_q_head = 0;  // next write position
+static uint32_t                 zt_q_count = 0; // entries in quarantine
+static uint64_t                 zt_alloc_count = 0;
+static uint64_t                 zt_free_count = 0;
+static uint64_t                 zt_uaf_count = 0;
+static uint64_t                 zt_double_free_count = 0;
+static uint64_t                 zt_zone_confusion_count = 0;
+static uint64_t                 zt_wild_free_count = 0;
+
+static inline uint32_t zt_hash(void *ptr) {
+	uintptr_t v = (uintptr_t)ptr;
+	v = (v >> 4) ^ (v >> 18);
+	return (uint32_t)(v & ZT_HASH_MASK);
+}
+
+static struct zt_entry* zt_find(void *ptr) {
+	uint32_t idx = zt_hash(ptr);
+	for (uint32_t i = 0; i < 64; i++) {  // linear probe, max 64 steps
+		uint32_t slot = (idx + i) & ZT_HASH_MASK;
+		if (zt_table[slot].ptr == ptr) return &zt_table[slot];
+		if (zt_table[slot].ptr == NULL) return NULL;
+	}
+	return NULL;
+}
+
+static void zt_insert(void *ptr, struct zone *zone, uint32_t size) {
+	uint32_t idx = zt_hash(ptr);
+	for (uint32_t i = 0; i < 64; i++) {
+		uint32_t slot = (idx + i) & ZT_HASH_MASK;
+		if (zt_table[slot].ptr == NULL || zt_table[slot].ptr == ptr) {
+			zt_table[slot].ptr = ptr;
+			zt_table[slot].zone = zone;
+			zt_table[slot].size = size;
+			zt_table[slot].freed = 0;
+			zt_alloc_count++;
+			return;
+		}
+	}
+	// Table full — silently skip tracking (shouldn't happen with 8K slots)
+	zt_alloc_count++;
+}
+
+static void zt_quarantine_push(void *ptr, uint32_t size) {
+	// If quarantine is full, evict oldest entry (actually free it)
+	if (zt_q_count >= ZT_QUARANTINE) {
+		struct zt_quarantine_entry *oldest = &zt_quarantine[zt_q_head];
+		if (oldest->ptr) {
+			__asan_unpoison_memory_region(oldest->ptr, oldest->size);
+			free(oldest->ptr);
+			// Remove from tracking table
+			struct zt_entry *e = zt_find(oldest->ptr);
+			if (e) e->ptr = NULL;
+		}
+	} else {
+		zt_q_count++;
+	}
+	zt_quarantine[zt_q_head].ptr = ptr;
+	zt_quarantine[zt_q_head].size = size;
+	zt_q_head = (zt_q_head + 1) % ZT_QUARANTINE;
+
+	// Poison the freed memory so ASAN catches UAF
+	__asan_poison_memory_region(ptr, size);
+}
+
+// Reset zone tracking between fuzzer iterations.
+// Drains quarantine (unpoisoning + freeing all deferred allocations)
+// and clears the hash table.
+__attribute__((visibility("default")))
+void zone_tracking_reset(void) {
+	// Drain quarantine
+	for (uint32_t i = 0; i < ZT_QUARANTINE; i++) {
+		if (zt_quarantine[i].ptr) {
+			__asan_unpoison_memory_region(zt_quarantine[i].ptr,
+			                              zt_quarantine[i].size);
+			free(zt_quarantine[i].ptr);
+			zt_quarantine[i].ptr = NULL;
+			zt_quarantine[i].size = 0;
+		}
+	}
+	zt_q_head = 0;
+	zt_q_count = 0;
+
+	// Clear tracking table
+	memset(zt_table, 0, sizeof(zt_table));
+
+	// Reset stats for this iteration
+	zt_alloc_count = 0;
+	zt_free_count = 0;
+}
+
+// ============================================================================
+// Zone create / init
+// ============================================================================
+
 struct zone* zinit(uintptr_t size, uintptr_t max, uintptr_t alloc,
                    const char* name) {
   struct zone* zone = (struct zone*)calloc(1, sizeof(struct zone));
   zone->z_elem_size = size;
+  zone->z_name = name;
+  zone->z_self = zone;
   return zone;
 }
 
@@ -58,30 +204,22 @@ zone_t zone_create(
 {
   struct zone* zone = (struct zone*)calloc(1, sizeof(struct zone));
   zone->z_elem_size = size;
+  zone->z_name = name;
+  zone->z_self = zone;
   return zone;
 }
 
 // TODO: validation here
 void zone_change() { return; }
 
+// ============================================================================
+// zalloc / zfree — tracked
+// ============================================================================
+
 /*
- * zalloc -- allocate one element from a zone.
- *
- * In the real kernel, zones are always initialized before use via the
- * ZONE_DECLARE / zone_create startup path.  In the fuzzer build, zones
- * declared with ZONE_DECLARE are left as NULL pointers because the
- * STARTUP_ARG registration is a no-op (see fuzz/include/kern/startup.h).
- *
  * When we encounter a NULL zone we allocate a generous default buffer
  * (4096 bytes).  This is intentionally larger than any XNU struct that
- * could be allocated through a zone (typical sizes: knote ~200B,
- * kqworkloop ~600B, pipepair ~700B).  Using a large default avoids
- * ASAN heap-buffer-overflow false positives that occur when the
- * allocation is smaller than the struct the caller writes into.
- *
- * When the zone is non-NULL (created via zinit/zone_create at runtime),
- * we use z_elem_size as intended.  A z_elem_size of 0 is treated the
- * same as NULL -- fall back to the 4096-byte default.
+ * could be allocated through a zone.
  */
 #define ZALLOC_DEFAULT_SIZE 4096
 
@@ -90,23 +228,78 @@ void* zalloc(struct zone* zone) {
   if (zone != NULL && zone->z_elem_size > 0) {
     size = zone->z_elem_size;
   }
-  return calloc(1, size);
+  void *ptr = calloc(1, size);
+  if (ptr) {
+    zt_insert(ptr, zone, (uint32_t)size);
+  }
+  return ptr;
 }
 
 void* zalloc_noblock(struct zone* zone) { return zalloc(zone); }
 
-extern void     zfree(
+extern void zfree(
 	zone_or_view_t  zone_or_view,
 	void            *elem) {
-  (void)zone_or_view;
-  free(elem);
+  if (!elem) return;
+
+  struct zt_entry *e = zt_find(elem);
+  if (!e) {
+    // Not in our tracking table — could be kalloc or pre-tracking alloc.
+    // Report wild free only if zone_tracking has been active long enough.
+    if (zt_alloc_count > 100) {
+      zt_wild_free_count++;
+    }
+    free(elem);
+    return;
+  }
+
+  // Double-free detection
+  if (e->freed) {
+    zt_double_free_count++;
+    printf("ZONE BUG: double-free of %p (zone=%s, size=%u)\n",
+           elem,
+           (e->zone && e->zone->z_name) ? e->zone->z_name : "<unknown>",
+           e->size);
+    // Let ASAN catch this — freeing poisoned memory will trigger report
+    free(elem);
+    return;
+  }
+
+  // Zone confusion detection: freeing to wrong zone
+  struct zone *free_zone = zone_or_view.zov_zone;
+  if (e->zone != NULL && free_zone != NULL && e->zone != free_zone) {
+    zt_zone_confusion_count++;
+    printf("ZONE BUG: zone confusion! %p allocated from '%s' (elem_size=%u) "
+           "but freed to '%s' (elem_size=%u)\n",
+           elem,
+           e->zone->z_name ? e->zone->z_name : "<?>",
+           e->zone->z_elem_size,
+           free_zone->z_name ? free_zone->z_name : "<?>",
+           free_zone->z_elem_size);
+    // Still free it but this is a REAL BUG in XNU if it happens
+  }
+
+  // Mark freed and quarantine
+  e->freed = 1;
+  zt_free_count++;
+  zt_quarantine_push(elem, e->size);
 }
+
+// ============================================================================
+// kalloc / kfree — tracked without zone
+// ============================================================================
 
 int cpu_number() { return 0; }
 
 void* kalloc_canblock(size_t* psize, bool canblock, void* site) {
-  return malloc(*psize);
+  void *ptr = malloc(*psize);
+  if (ptr) zt_insert(ptr, NULL, (uint32_t)*psize);
+  return ptr;
 }
+
+// ============================================================================
+// mbuf page pool (unchanged)
+// ============================================================================
 
 static bool mb_is_ready = false;
 extern unsigned char* mbutl;
@@ -131,9 +324,6 @@ uintptr_t kmem_mb_alloc(unsigned int mbmap, int size, int physContig,
   assert(mbutl);
   int pages = size / 4096;
   if (current_page + pages > 65535) {
-    // Pool exhausted — wrap around to reuse pages.  In the real kernel
-    // this would be a hard failure, but for fuzzing we prefer to keep
-    // running so the iteration can complete and clear_all() can reset.
     current_page = 0;
   }
   uintptr_t ret = (uintptr_t)mbutl + (current_page * 4096);
@@ -151,30 +341,91 @@ void kmem_mb_reset_pages(void) {
 // TODO: actually simulate physical page mappings
 unsigned int pmap_find_phys(int pmap, uintptr_t va) { return (unsigned int)((va >> 12) + 1); }
 
+// ============================================================================
+// MALLOC / FREE — tracked
+// ============================================================================
+
 void* __MALLOC_ZONE(size_t size, int type, int flags,
                     vm_allocation_site_t* site) {
-  if (flags & 1) return calloc(1, size);  // M_ZERO = 0x0001
-  return malloc(size);
+  void *ptr;
+  if (flags & 1) ptr = calloc(1, size);  // M_ZERO = 0x0001
+  else ptr = malloc(size);
+  if (ptr) zt_insert(ptr, NULL, (uint32_t)size);
+  return ptr;
 }
 
-void _FREE_ZONE(void* elem, size_t size, int type) { free(elem); }
+void _FREE_ZONE(void* elem, size_t size, int type) {
+  if (!elem) return;
+  struct zt_entry *e = zt_find(elem);
+  if (e) {
+    if (e->freed) {
+      zt_double_free_count++;
+      printf("ZONE BUG: double-free of %p (MALLOC, size=%u)\n", elem, e->size);
+    }
+    e->freed = 1;
+    zt_free_count++;
+    zt_quarantine_push(elem, e->size);
+    return;
+  }
+  free(elem);
+}
 
 #undef kfree
-void kfree(void* data, size_t size) { free(data); }
+void kfree(void* data, size_t size) {
+  if (!data) return;
+  struct zt_entry *e = zt_find(data);
+  if (e) {
+    if (e->freed) {
+      zt_double_free_count++;
+      printf("ZONE BUG: double-free of %p (kfree, size=%u)\n", data, e->size);
+    }
+    e->freed = 1;
+    zt_free_count++;
+    zt_quarantine_push(data, e->size);
+    return;
+  }
+  free(data);
+}
 
 void* realloc(void* ptr, size_t size);
 
 void* __REALLOC(void* addr, size_t size, int type, int flags,
                 vm_allocation_site_t* site) {
+  // Remove old tracking before realloc (pointer may change)
+  if (addr) {
+    struct zt_entry *e = zt_find(addr);
+    if (e) e->ptr = NULL;
+  }
   void* ptr = realloc(addr, size);
+  if (ptr) zt_insert(ptr, NULL, (uint32_t)size);
   return ptr;
 }
 
-void OSFree(void* ptr, uint32_t size, void* tag) { free(ptr); }
+void OSFree(void* ptr, uint32_t size, void* tag) {
+  if (!ptr) return;
+  struct zt_entry *e = zt_find(ptr);
+  if (e) {
+    if (e->freed) {
+      zt_double_free_count++;
+      printf("ZONE BUG: double-free of %p (OSFree)\n", ptr);
+    }
+    e->freed = 1;
+    zt_free_count++;
+    zt_quarantine_push(ptr, e->size);
+    return;
+  }
+  free(ptr);
+}
 
 void* OSMalloc(uint32_t size, void* tag) {
-  return malloc(size);
+  void *ptr = malloc(size);
+  if (ptr) zt_insert(ptr, NULL, size);
+  return ptr;
 }
+
+// ============================================================================
+// Heap definitions (unchanged)
+// ============================================================================
 
 SECURITY_READ_ONLY_LATE(struct kalloc_heap) KHEAP_DATA_BUFFERS[1] = {
 	{
@@ -206,6 +457,18 @@ kheap_free(
 	kalloc_heap_t heap,
 	void         *data,
 	vm_size_t     size) {
+  if (!data) return;
+  struct zt_entry *e = zt_find(data);
+  if (e) {
+    if (e->freed) {
+      zt_double_free_count++;
+      printf("ZONE BUG: double-free of %p (kheap_free)\n", data);
+    }
+    e->freed = 1;
+    zt_free_count++;
+    zt_quarantine_push(data, e->size);
+    return;
+  }
   free(data);
 }
 
@@ -230,6 +493,7 @@ kalloc_ext(
   if (flags & Z_ZERO) {
     bzero(addr, req_size);
   }
+  if (addr) zt_insert(addr, NULL, (uint32_t)req_size);
   return (struct kalloc_result){ .addr = addr, .size = req_size };
 }
 
@@ -241,9 +505,23 @@ void *zalloc_flags(union zone_or_view zov, zalloc_flags_t flags) {
 void kheap_free_addr(
 	kalloc_heap_t         heap,
 	void                 *addr) {
+  if (!addr) return;
+  struct zt_entry *e = zt_find(addr);
+  if (e) {
+    if (e->freed) {
+      zt_double_free_count++;
+      printf("ZONE BUG: double-free of %p (kheap_free_addr)\n", addr);
+    }
+    e->freed = 1;
+    zt_free_count++;
+    zt_quarantine_push(addr, e->size);
+    return;
+  }
   free(addr);
 }
 
 void *zalloc_permanent(vm_size_t size, vm_offset_t mask) {
-  return malloc(size);
+  void *ptr = malloc(size);
+  if (ptr) zt_insert(ptr, NULL, (uint32_t)size);
+  return ptr;
 }

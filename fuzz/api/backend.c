@@ -103,6 +103,7 @@ __attribute__((visibility("default"))) bool init_proc(void) {
 extern void kmem_mb_reset_pages(void);
 extern void fake_time_reset(void);
 extern void fake_uuid_reset(void);
+extern void zone_tracking_reset(void);
 extern char fake_thread[];
 extern char fake_uthread[];
 
@@ -147,6 +148,7 @@ __attribute__((visibility("default"))) void clear_all() {
   kmem_mb_reset_pages();
   fake_time_reset();
   fake_uuid_reset();
+  zone_tracking_reset();
   memset(fake_thread, 0, 8192);
   memset(fake_uthread, 0, 4096);
 }
