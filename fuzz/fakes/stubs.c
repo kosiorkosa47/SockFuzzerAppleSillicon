@@ -511,11 +511,9 @@ void* vfs_context_create() { return (void*)1; }
 
 int vfs_context_rele() { return 0; }
 
-STUB_ABORT(vm_kernel_slid_base)
-
-STUB_ABORT(vm_kernel_slid_top)
-
-STUB_ABORT(vm_kernel_slide)
+uintptr_t vm_kernel_slid_base = 0;
+uintptr_t vm_kernel_slid_top = 0xFFFFFFFF;
+uintptr_t vm_kernel_slide = 0;
 
 void vn_stat() {}
 
@@ -571,7 +569,7 @@ void zalloc_canblock() {}
 
 void zfill() {}
 
-STUB_ABORT(kernel_pmap)
+void *kernel_pmap = (void *)1;
 
 void kmem_free(void *map, void *addr, unsigned long size) { free(addr); }
 
@@ -863,9 +861,9 @@ void filt_wlattach_sync_ipc() {}
 
 void thread_deallocate_safe() {}
 
-STUB_ABORT(vm_kernel_addrhash)
+uintptr_t vm_kernel_addrhash(uintptr_t addr) { return addr; }
 
-STUB_ABORT(_vm_kernel_addrhash_XNU_INTERNAL)
+uintptr_t _vm_kernel_addrhash_XNU_INTERNAL(uintptr_t addr) { return addr; }
 
 void thread_add_servicer_override() {}
 

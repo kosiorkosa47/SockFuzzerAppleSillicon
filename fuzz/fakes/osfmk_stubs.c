@@ -99,17 +99,19 @@ void lck_attr_free(lck_attr_t *attr) {}
 void lck_attr_setdebug(lck_attr_t *attr) {}
 
 OS_OVERLOADABLE
-uint64_t counter_load(unsigned long long **counter) { printf("STUB HIT: counter_load\n"); assert(false); }
+uint64_t counter_load(unsigned long long **counter) { return 0; }
 
-int32_t sysctl_get_bound_cpuid(void) { printf("STUB HIT: sysctl_get_bound_cpuid\n"); assert(false); }
+int32_t sysctl_get_bound_cpuid(void) { return 0; }
 
-kern_return_t sysctl_thread_bind_cpuid(int32_t cpuid) { printf("STUB HIT: sysctl_thread_bind_cpuid\n"); assert(false); }
+kern_return_t sysctl_thread_bind_cpuid(int32_t cpuid) { return KERN_SUCCESS; }
 
 kern_return_t kernel_memory_allocate(vm_map_t map, vm_offset_t *addrp,
                                      vm_size_t size, vm_offset_t mask,
                                      kma_flags_t flags, vm_tag_t tag) {
-  printf("STUB HIT: kernel_memory_allocate\n");
-  assert(false);
+  void *p = malloc(size);
+  if (!p) return KERN_RESOURCE_SHORTAGE;
+  *addrp = (vm_offset_t)p;
+  return KERN_SUCCESS;
 }
 
 void lck_mtx_startup_init(struct lck_mtx_startup_spec *spec) {}
@@ -130,8 +132,7 @@ btlog_t *
 btlog_create(size_t numrecords,
     size_t record_btdepth,
     boolean_t caller_will_remove_entries_for_element) {
-      printf("STUB HIT: btlog_create\n");
-      assert(false);
+      return NULL;  // btlog disabled in fuzzer
     }
 
 void machine_init() {}
